@@ -769,6 +769,149 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Update Management
+const updateNotification = document.getElementById('update-notification');
+const updateNotificationTitle = document.getElementById('update-notification-title');
+const updateNotificationMessage = document.getElementById('update-notification-message');
+const updateDownloadBtn = document.getElementById('update-download-btn');
+const updateInstallBtn = document.getElementById('update-install-btn');
+const updateDismissBtn = document.getElementById('update-dismiss-btn');
+const updateProgressBar = document.getElementById('update-progress-bar');
+const updateProgressFill = document.getElementById('update-progress-fill');
+const updateProgressText = document.getElementById('update-progress-text');
+const checkUpdatesBtn = document.getElementById('check-updates-btn');
+const appVersionSpan = document.getElementById('app-version');
+
+// Load app version on startup
+window.electronAPI.getAppVersion().then(result => {
+  if (result && result.version) {
+    appVersionSpan.textContent = result.version;
+  }
+}).catch(err => {
+  console.error('Error getting app version:', err);
+  appVersionSpan.textContent = 'Unknown';
+});
+
+// Check for updates button
+if (checkUpdatesBtn) {
+  checkUpdatesBtn.addEventListener('click', async () => {
+    checkUpdatesBtn.disabled = true;
+    checkUpdatesBtn.textContent = 'Checking...';
+    try {
+      await window.electronAPI.checkForUpdates(true);
+    } catch (error) {
+      console.error('Error checking for updates:', error);
+      alert('Error checking for updates: ' + error.message);
+    } finally {
+      checkUpdatesBtn.disabled = false;
+      checkUpdatesBtn.textContent = 'Check for Updates';
+    }
+  });
+}
+
+// Update available handler
+window.electronAPI.onUpdateAvailable((data) => {
+  console.log('Update available:', data);
+  updateNotificationTitle.textContent = `Update Available: v${data.version}`;
+  updateNotificationMessage.textContent = data.releaseNotes 
+    ? `Release notes: ${data.releaseNotes.substring(0, 100)}${data.releaseNotes.length > 100 ? '...' : ''}`
+    : `A new version (${data.version}) is available.`;
+  updateDownloadBtn.style.display = 'inline-block';
+  updateInstallBtn.style.display = 'none';
+  updateProgressBar.style.display = 'none';
+  updateNotification.style.display = 'block';
+});
+
+// Update not available handler
+window.electronAPI.onUpdateNotAvailable((data) => {
+  console.log('No update available:', data);
+  // Show a brief message that user is up to date
+  if (checkUpdatesBtn) {
+    const originalText = checkUpdatesBtn.textContent;
+    checkUpdatesBtn.textContent = 'Up to date!';
+    checkUpdatesBtn.style.background = '#28a745';
+    setTimeout(() => {
+      checkUpdatesBtn.textContent = originalText;
+      checkUpdatesBtn.style.background = '';
+    }, 2000);
+  }
+});
+
+// Update error handler
+window.electronAPI.onUpdateError((data) => {
+  console.error('Update error:', data);
+  updateNotificationTitle.textContent = 'Update Check Failed';
+  updateNotificationMessage.textContent = data.message || 'Unknown error occurred.';
+  updateDownloadBtn.style.display = 'none';
+  updateInstallBtn.style.display = 'none';
+  updateProgressBar.style.display = 'none';
+  updateNotification.style.display = 'block';
+  updateNotification.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+});
+
+// Download progress handler
+window.electronAPI.onUpdateDownloadProgress((data) => {
+  console.log('Download progress:', data.percent + '%');
+  updateProgressBar.style.display = 'block';
+  updateProgressFill.style.width = data.percent + '%';
+  updateProgressText.textContent = `${data.percent}%`;
+  
+  // Format bytes
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+  
+  if (data.transferred && data.total) {
+    updateProgressText.textContent = `${data.percent}% (${formatBytes(data.transferred)} / ${formatBytes(data.total)})`;
+  }
+});
+
+// Update downloaded handler
+window.electronAPI.onUpdateDownloaded((data) => {
+  console.log('Update downloaded:', data);
+  updateNotificationTitle.textContent = `Update Ready: v${data.version}`;
+  updateNotificationMessage.textContent = 'The update has been downloaded and is ready to install. Click "Install & Restart" to apply the update.';
+  updateDownloadBtn.style.display = 'none';
+  updateInstallBtn.style.display = 'inline-block';
+  updateProgressBar.style.display = 'none';
+  updateNotification.style.display = 'block';
+});
+
+// Download update button
+updateDownloadBtn.addEventListener('click', async () => {
+  updateDownloadBtn.disabled = true;
+  updateDownloadBtn.textContent = 'Downloading...';
+  try {
+    await window.electronAPI.downloadUpdate();
+  } catch (error) {
+    console.error('Error downloading update:', error);
+    alert('Error downloading update: ' + error.message);
+    updateDownloadBtn.disabled = false;
+    updateDownloadBtn.textContent = 'Download Update';
+  }
+});
+
+// Install update button
+updateInstallBtn.addEventListener('click', async () => {
+  if (confirm('The application will restart to install the update. Continue?')) {
+    try {
+      await window.electronAPI.installUpdate();
+    } catch (error) {
+      console.error('Error installing update:', error);
+      alert('Error installing update: ' + error.message);
+    }
+  }
+});
+
+// Dismiss update notification
+updateDismissBtn.addEventListener('click', () => {
+  updateNotification.style.display = 'none';
+});
+
 // Clear cache button
 clearCacheBtn.addEventListener('click', async () => {
   if (!confirm('Are you sure you want to clear all cached data? This will force the app to re-fetch all EPD data and percentile breakdowns on the next lookup.')) {

@@ -9,6 +9,7 @@ const percentileLookup = require('./percentile-lookup');
 const cacheUtil = require('./cache-util');
 const cacheCleanup = require('./cache-cleanup');
 const licenseManager = require('./license-manager');
+const updateManager = require('./update-manager');
 
 let mainWindow;
 let scrapingQueue = [];
@@ -267,10 +268,15 @@ app.whenReady().then(async () => {
   }
   
   createWindow();
+  
+  // Initialize update manager after window is created
+  updateManager.initialize(mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+      // Re-initialize update manager if window was recreated
+      updateManager.initialize(mainWindow);
     }
   });
 
@@ -323,6 +329,26 @@ ipcMain.handle('activate-license', async (event, licenseKey) => {
 
 ipcMain.handle('deactivate-license', async (event) => {
   return licenseManager.deactivateLicense();
+});
+
+// IPC Handlers for updates
+ipcMain.handle('check-for-updates', async (event, showDialog = true) => {
+  updateManager.checkForUpdates(showDialog);
+  return { success: true };
+});
+
+ipcMain.handle('download-update', async (event) => {
+  updateManager.downloadUpdate();
+  return { success: true };
+});
+
+ipcMain.handle('install-update', async (event) => {
+  updateManager.installUpdate();
+  return { success: true };
+});
+
+ipcMain.handle('get-app-version', async (event) => {
+  return { version: updateManager.getCurrentVersion() };
 });
 
 // IPC Handlers

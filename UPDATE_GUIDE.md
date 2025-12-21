@@ -1,0 +1,337 @@
+# Versioning and Auto-Update Guide
+
+This guide explains how to use the versioning and auto-update system for the Black Angus EPD Color Coder application.
+
+## Overview
+
+The application uses `electron-updater` to automatically check for and install updates from GitHub releases. Updates are checked automatically on startup (after 10 seconds) and periodically every 6 hours.
+
+## How It Works
+
+1. **Version Management**: The app version is defined in `package.json` (currently `1.0.1`)
+2. **Update Source**: Updates are distributed via GitHub Releases
+3. **Auto-Check**: The app automatically checks for updates on startup and periodically
+4. **User Control**: Users can manually check for updates using the "Check for Updates" button
+
+## Publishing a New Version
+
+### Step 1: Update Version Number
+
+Update the version in `package.json`:
+
+```json
+{
+  "version": "1.0.2"  // Increment this (e.g., 1.0.1 -> 1.0.2)
+}
+```
+
+Follow [Semantic Versioning](https://semver.org/):
+- **MAJOR** (1.0.0 → 2.0.0): Breaking changes
+- **MINOR** (1.0.0 → 1.1.0): New features, backward compatible
+- **PATCH** (1.0.0 → 1.0.1): Bug fixes, backward compatible
+
+### Step 2: Build the Application
+
+Build the application for your target platform(s). The YAML metadata files are automatically generated when you build:
+
+**For macOS:**
+```bash
+npm run build:mac
+```
+
+**For Windows:**
+```bash
+npm run build:win
+```
+
+**For Linux:**
+```bash
+npm run build:linux
+```
+
+**For all platforms:**
+```bash
+npm run build:all
+```
+
+**Or build for current platform:**
+```bash
+npm run build
+```
+
+This will create distributable files AND the required `latest-*.yml` metadata files in the `dist` directory.
+
+**Important:** The build scripts now include `--publish never` which tells electron-builder to generate the YAML metadata files without actually publishing to GitHub. This ensures you get the required `latest-*.yml` files for manual uploads.
+
+**If you still don't see the YAML files after building:**
+1. Make sure you're using the updated build scripts (they include `--publish never`)
+2. Check the `dist` folder after building - look for files named:
+   - `latest-mac.yml` (for macOS builds)
+   - `latest.yml` (for Windows builds)  
+   - `latest-linux.yml` (for Linux builds)
+3. If building for multiple platforms, you'll get multiple YAML files
+4. The YAML files are small text files (usually 1-2 KB) that contain update metadata
+
+### Step 3: Create a GitHub Release
+
+**Option A: Automatic Publishing (Recommended)**
+
+If you have a GitHub token configured, electron-builder can automatically publish to GitHub:
+
+```bash
+npm run build -- --publish always
+```
+
+This will automatically:
+- Build the application
+- Create a GitHub release
+- Upload all necessary files
+- Tag the release
+
+**Option B: Manual Publishing**
+
+1. Go to your GitHub repository: https://github.com/equinepromo/Black-Angus-EPD-Color-Coder
+2. Click "Releases" → "Create a new release"
+3. Create a new tag (e.g., `v1.0.2`) or use an existing tag
+4. **Important**: The tag name should match the version in `package.json` (with or without the `v` prefix)
+5. Add release notes describing the changes
+6. Upload the following files from the `dist` directory:
+
+   **For macOS:**
+   - `Black-Angus-EPD-Color-Coder-x.y.z.dmg` (or `.zip` if generated)
+   - `latest-mac.yml` ⚠️ **REQUIRED** - This metadata file is essential for auto-updates
+   - `*.blockmap` files (optional, but recommended for incremental/delta updates)
+
+   **For Windows:**
+   - `Black-Angus-EPD-Color-Coder-Setup-x.y.z.exe`
+   - `latest.yml` ⚠️ **REQUIRED** - This metadata file is essential for auto-updates
+   - `*.blockmap` files (optional, but recommended for incremental/delta updates)
+
+   **For Linux:**
+   - `Black-Angus-EPD-Color-Coder-x.y.z.AppImage` (or `.deb`, `.rpm`, etc.)
+   - `latest-linux.yml` ⚠️ **REQUIRED** - This metadata file is essential for auto-updates
+   - `*.blockmap` files (optional, but recommended for incremental/delta updates)
+
+7. Publish the release
+
+**⚠️ Critical:** The `.yml` metadata files (latest-mac.yml, latest.yml, latest-linux.yml) are **REQUIRED** for auto-updates to work. Without them, electron-updater cannot determine if updates are available or download them.
+
+**About Blockmap Files (Incremental Updates):**
+
+Blockmap files (`.blockmap`) enable **incremental/delta updates**, which means:
+- ✅ **With blockmap files**: Users download only the changed parts of your app (much smaller downloads, faster updates)
+- ⚠️ **Without blockmap files**: Users download the full installer each time (still works, but larger downloads)
+
+**How it works:**
+1. Blockmap files divide your app into small blocks with checksums
+2. When updating, electron-updater compares old vs new blockmaps
+3. Only changed blocks are downloaded (not the entire installer)
+4. The updater reconstructs the new version from old + new blocks
+
+**Recommendation:** Include blockmap files for better user experience. They're automatically generated by electron-builder and are small (usually 100-200 KB). For a 100 MB app with a small change, incremental updates might only download 10-20 MB instead of the full 100 MB.
+
+**What NOT to upload:**
+- Unpacked folders (`mac/`, `mac-arm64/`, `win-unpacked/`, `win-arm64-unpacked/`) - These are intermediate build artifacts
+- Source maps
+- Other intermediate build artifacts
+- Just the installer files alone (you need the .yml files too!)
+
+**About the Unpacked Directories:**
+
+The directories you see in `dist/` (like `mac/`, `win-unpacked/`, etc.) are **intermediate build artifacts** created by electron-builder during the packaging process. They contain the unpacked application files before they're packaged into installers.
+
+**What they are:**
+- `mac/` or `mac-arm64/` - Unpacked macOS `.app` bundle
+- `win-unpacked/` or `win-arm64-unpacked/` - Unpacked Windows application files
+- `.icon-ico/` - Temporary icon processing directory
+
+**Do you need them for releases?**
+- ❌ **No** - They're not needed for GitHub releases or auto-updates
+- ✅ The installers (`.dmg`, `.exe`) already contain everything from these directories
+- ✅ electron-updater uses the installers, not these unpacked directories
+
+**When might they be useful?**
+1. **Manual testing** - You can run the app directly from these directories without installing:
+   - macOS: `open dist/mac/Black\ Angus\ EPD\ Color\ Coder.app`
+   - Windows: Run the `.exe` from `win-unpacked/`
+2. **Debugging** - Inspect the built files to verify what's included
+3. **Manual distribution** - If you want to distribute a portable version (not recommended for production)
+4. **Development** - Quick testing of the built app before creating installers
+
+**Recommendation:** 
+- Don't upload them to GitHub releases
+- You can delete them to save space (they'll be regenerated on the next build)
+- Keep them if you want to test the built app before distributing
+
+### Step 4: Verify Update Detection
+
+After publishing:
+1. The app will automatically detect the new version on the next update check
+2. Users will see a notification banner when an update is available
+3. Users can download and install the update directly from the app
+
+## Update Flow for Users
+
+1. **Automatic Check**: App checks for updates 10 seconds after startup and every 6 hours
+2. **Update Available**: If an update is found, a notification banner appears at the top
+3. **Download**: User clicks "Download Update" to download the new version
+4. **Install**: After download completes, user clicks "Install & Restart" to apply the update
+5. **Restart**: App restarts automatically with the new version
+
+## Manual Update Check
+
+Users can manually check for updates:
+- Click the "Check for Updates" button in the header (next to the version number)
+- The app will check GitHub for available updates
+
+## Configuration
+
+### Update Check Interval
+
+The update check interval is set in `main/update-manager.js`:
+
+```javascript
+const CHECK_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+```
+
+### GitHub Repository
+
+The GitHub repository is configured in `package.json`:
+
+```json
+{
+  "build": {
+    "publish": {
+      "provider": "github",
+      "owner": "equinepromo",
+      "repo": "Black-Angus-EPD-Color-Coder"
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+### Updates Not Detected
+
+1. **Check GitHub Release**: Ensure the release is published (not draft)
+2. **Check Tag Name**: Tag should match version (e.g., `v1.0.2` for version `1.0.2`)
+3. **Check Files**: Ensure installer files AND `.yml` metadata files are uploaded to the release
+   - Missing `latest-mac.yml`, `latest.yml`, or `latest-linux.yml` will prevent updates from working
+4. **Check File Names**: The `.yml` files must be named exactly as `latest-mac.yml`, `latest.yml`, or `latest-linux.yml`
+5. **Check Network**: Ensure the app can reach GitHub (firewall/proxy issues)
+6. **Check Release Assets**: Verify all files are listed in the release's "Assets" section
+
+### Development Mode
+
+Update checking is **disabled** in development mode (when `app.isPackaged === false`). This prevents false update notifications during development.
+
+### Code Signing
+
+For production releases, especially on macOS and Windows, code signing is recommended:
+- **macOS**: Sign with an Apple Developer certificate
+- **Windows**: Sign with a code signing certificate
+
+Unsigned apps may show security warnings to users.
+
+## Version Display
+
+The current app version is displayed in the header next to the "Check for Updates" button. This helps users know which version they're running.
+
+## Release Notes
+
+When creating a GitHub release, include detailed release notes. These will be shown to users when an update is available. Good release notes include:
+- New features
+- Bug fixes
+- Breaking changes (if any)
+- Migration instructions (if needed)
+- **Installation instructions** (especially important for first-time users)
+
+### Adding Installation Instructions to Releases
+
+**Yes, you should definitely add installation instructions to your GitHub releases!** This is the first thing users see when they download your app.
+
+**Why it's important:**
+- Users see instructions right when they need them
+- Reduces support requests
+- Especially critical for macOS users who may see the "damaged app" error
+- Helps users understand the installation process
+
+**How to add them:**
+1. When creating a GitHub release, use the description field
+2. Copy the template from `RELEASE_NOTES_TEMPLATE.md`
+3. Customize with your version-specific information
+4. Include platform-specific instructions (macOS, Windows, Linux)
+
+**What to include:**
+- Quick installation steps for each platform
+- Troubleshooting for common issues (especially macOS "damaged app" error)
+- Link to full installation instructions if needed
+- Information about auto-updates
+
+See `RELEASE_NOTES_TEMPLATE.md` for a ready-to-use template.
+
+## Best Practices
+
+1. **Test Before Release**: Always test the built application before publishing
+2. **Incremental Versions**: Use semantic versioning consistently
+3. **Release Notes**: Write clear, user-friendly release notes
+4. **Staged Rollouts**: Consider releasing to a small group first for testing
+5. **Backward Compatibility**: Try to maintain backward compatibility when possible
+
+## Repository Visibility and Access
+
+### Public vs Private Repositories
+
+**For Auto-Updates to Work:**
+- ✅ **Public Repository**: Releases are automatically public and accessible to everyone
+- ⚠️ **Private Repository**: Releases are private by default, but you can make individual releases public
+  - Go to your release → Edit release → Check "Set as the latest release" and ensure it's not marked as draft
+  - However, electron-updater **cannot authenticate** to access private releases
+  - **Solution**: Make the release public even if the repo is private (GitHub allows this)
+
+**How to Make a Release Public in a Private Repo:**
+1. Create the release as normal
+2. The release assets (installer files) will be accessible via direct links
+3. electron-updater can access public release assets even from private repos
+4. Users don't need GitHub accounts to download from public releases
+
+### What Users Need to Download
+
+**Initial Installation (First Time Users):**
+Users need to download the installer file for their platform:
+- **macOS**: Download the `.dmg` file from the GitHub release
+- **Windows**: Download the `.exe` installer from the GitHub release
+- **Linux**: Download the `.AppImage`, `.deb`, or `.rpm` file from the GitHub release
+
+**How to Share the Download Link:**
+1. Go to your GitHub release page
+2. Right-click on the installer file (e.g., `.dmg` or `.exe`)
+3. Copy the direct download link
+4. Share this link with users, or create a simple download page
+
+**Example Direct Download URLs:**
+```
+https://github.com/equinepromo/Black-Angus-EPD-Color-Coder/releases/download/v1.0.1/Black-Angus-EPD-Color-Coder-1.0.1.dmg
+https://github.com/equinepromo/Black-Angus-EPD-Color-Coder/releases/download/v1.0.1/Black-Angus-EPD-Color-Coder-Setup-1.0.1.exe
+```
+
+**After Initial Installation:**
+- ✅ Users don't need to manually download updates
+- ✅ The app automatically checks for updates
+- ✅ Users can click "Download Update" in the app when available
+- ✅ Updates are downloaded and installed directly from the app
+
+## Security Considerations
+
+- Updates are downloaded from GitHub, which uses HTTPS
+- The app verifies the update source matches the configured repository
+- Users must explicitly approve download and installation
+- Updates are only installed when the user clicks "Install & Restart"
+- Public releases are accessible without authentication (good for distribution)
+
+## Additional Resources
+
+- [electron-updater Documentation](https://www.electron.build/auto-update)
+- [Semantic Versioning](https://semver.org/)
+- [GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)

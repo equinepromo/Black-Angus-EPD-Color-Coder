@@ -5,7 +5,12 @@
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder --publish never",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "build:linux": "electron-builder --linux --publish never",
+    "build:all": "electron-builder --mac --win --linux --publish never",
+    "build:publish": "electron-builder --publish always"
   },
   "keywords": [
     "angus",
@@ -23,6 +28,7 @@
     "sharp": "^0.34.5"
   },
   "dependencies": {
+    "electron-updater": "^6.6.2",
     "exceljs": "^4.4.0",
     "puppeteer": "^24.34.0"
   },
@@ -32,7 +38,11 @@
     "directories": {
       "output": "dist"
     },
-    "publish": null,
+    "publish": {
+      "provider": "github",
+      "owner": "equinepromo",
+      "repo": "Black-Angus-EPD-Color-Coder"
+    },
     "files": [
       "main/**/*",
       "renderer/**/*",
@@ -47,7 +57,9 @@
       "node_modules/puppeteer/.local-chromium/**/*"
     ],
     "mac": {
-      "icon": "assets/icon.icns"
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.utilities",
+      "gatekeeperAssess": false
     },
     "win": {
       "icon": "assets/icon.png"

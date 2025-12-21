@@ -14,9 +14,32 @@
                 <div class="header-text">
                     <h1>Black Angus EPD Color Coder</h1>
                     <p>Enter registration numbers to extract EPD data</p>
+                    <p class="version-info" id="version-info" style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                        Version <span id="app-version">Loading...</span>
+                        <button id="check-updates-btn" style="margin-left: 10px; padding: 2px 8px; font-size: 0.85em; cursor: pointer;">Check for Updates</button>
+                    </p>
                 </div>
             </div>
         </header>
+
+        <!-- Update Notification Banner -->
+        <div id="update-notification" class="update-notification" style="display: none;">
+            <div class="update-notification-content">
+                <div class="update-notification-text">
+                    <strong id="update-notification-title">Update Available</strong>
+                    <span id="update-notification-message"></span>
+                </div>
+                <div class="update-notification-actions">
+                    <button id="update-download-btn" class="btn btn-primary" style="display: none;">Download Update</button>
+                    <button id="update-install-btn" class="btn btn-primary" style="display: none;">Install & Restart</button>
+                    <button id="update-dismiss-btn" class="btn btn-secondary">Dismiss</button>
+                </div>
+            </div>
+            <div id="update-progress-bar" class="update-progress-bar" style="display: none;">
+                <div id="update-progress-fill" class="update-progress-fill"></div>
+                <span id="update-progress-text" class="update-progress-text">0%</span>
+            </div>
+        </div>
 
         <div class="input-section">
             <div class="input-group">

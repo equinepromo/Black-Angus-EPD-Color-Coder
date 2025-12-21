@@ -17,6 +17,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   validateLicense: () => ipcRenderer.invoke('validate-license'),
   activateLicense: (licenseKey) => ipcRenderer.invoke('activate-license', licenseKey),
   deactivateLicense: () => ipcRenderer.invoke('deactivate-license'),
-  getCachedAnimals: () => ipcRenderer.invoke('get-cached-animals')
+  getCachedAnimals: () => ipcRenderer.invoke('get-cached-animals'),
+  // Update APIs
+  checkForUpdates: (showDialog) => ipcRenderer.invoke('check-for-updates', showDialog),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  onUpdateAvailable: (callback) => {
+    ipcRenderer.on('update-available', (event, data) => callback(data));
+  },
+  onUpdateNotAvailable: (callback) => {
+    ipcRenderer.on('update-not-available', (event, data) => callback(data));
+  },
+  onUpdateError: (callback) => {
+    ipcRenderer.on('update-error', (event, data) => callback(data));
+  },
+  onUpdateDownloadProgress: (callback) => {
+    ipcRenderer.on('update-download-progress', (event, data) => callback(data));
+  },
+  onUpdateDownloaded: (callback) => {
+    ipcRenderer.on('update-downloaded', (event, data) => callback(data));
+  }
 });
 
