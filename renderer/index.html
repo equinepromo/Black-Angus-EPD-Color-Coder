@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black Angus EPD Color Coder</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <img src="../assets/icon.png" alt="Black Angus Logo" class="logo" />
+                <div class="header-text">
+                    <h1>Black Angus EPD Color Coder</h1>
+                    <p>Enter registration numbers to extract EPD data</p>
+                </div>
+            </div>
+        </header>
+
+        <div class="input-section">
+            <div class="input-group">
+                <label for="registration-input">Registration Number(s):</label>
+                <div style="position: relative;">
+                    <textarea 
+                        id="registration-input" 
+                        placeholder="Enter one registration number, or multiple separated by commas or new lines (e.g., 20492951)"
+                        rows="4"
+                    ></textarea>
+                    <select id="cached-animals-dropdown" class="cached-animals-dropdown" style="display: none;">
+                        <option value="">Select cached animal...</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button id="scrape-btn" class="btn btn-primary">Process</button>
+                <button id="copy-table-btn" class="btn btn-secondary" disabled title="Copy table (colors may not work in Excel - use 'Export to Excel' for full formatting)">Copy Table</button>
+                <button id="export-excel-btn" class="btn btn-secondary" disabled>Export to Excel</button>
+                <button id="clear-cache-btn" class="btn btn-secondary">Clear Cache</button>
+            </div>
+
+            <div class="progress-section" id="progress-section" style="display: none; margin-top: 15px;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-text" id="progress-text"></div>
+            </div>
+
+            <div class="results-section" style="margin-top: 30px;">
+                <div id="main-results-container">
+                    <div class="placeholder">
+                        <p>Enter a registration number and click "Process" to begin</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-section" style="margin-top: 30px; padding-top: 30px; border-top: 2px solid #ddd;">
+            <h2 style="margin-bottom: 15px;">Mating Calculator</h2>
+            <div class="input-group" style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                    <label for="sire-input">Sire Registration Number:</label>
+                    <div style="position: relative;">
+                        <input 
+                            type="text" 
+                            id="sire-input" 
+                            placeholder="Enter sire registration number"
+                        />
+                        <select id="sire-dropdown" class="cached-animals-dropdown">
+                            <option value="">Select from cached animals...</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <label for="dam-input">Dam Registration Number:</label>
+                    <div style="position: relative;">
+                        <input 
+                            type="text" 
+                            id="dam-input" 
+                            placeholder="Enter dam registration number"
+                        />
+                        <select id="dam-dropdown" class="cached-animals-dropdown">
+                            <option value="">Select from cached animals...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="button-group" style="margin-top: 15px;">
+                <button id="calculate-mating-btn" class="btn btn-primary">Calculate</button>
+            </div>
+
+            <div class="progress-section" id="mating-progress-section" style="display: none; margin-top: 15px;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="mating-progress-fill"></div>
+                </div>
+                <div class="progress-text" id="mating-progress-text"></div>
+            </div>
+
+            <div class="results-section" style="margin-top: 30px;">
+                <div id="mating-results-container">
+                    <!-- Mating calculator results will appear here -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
+

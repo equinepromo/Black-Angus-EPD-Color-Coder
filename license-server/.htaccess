@@ -1,0 +1,25 @@
+# Enable CORS (if needed)
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</IfModule>
+
+# Force HTTPS (uncomment in production)
+# RewriteEngine On
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# PHP settings
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+</IfModule>
+
+# Security: Deny access to sensitive files
+<FilesMatch "\.(env|log|sql|md)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+

@@ -1,0 +1,2401 @@
+{
+  "BW": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 10,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 11,
+        "max": 14,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 15,
+        "max": 20,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 50,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 51,
+        "max": 54,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 55,
+        "max": 75,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "CED": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 10,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 11,
+        "max": 14,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 15,
+        "max": 20,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 50,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 51,
+        "max": 54,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 55,
+        "max": 75,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "WW": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 20,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 30,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 31,
+        "max": 34,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 35,
+        "max": 40,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 41,
+        "max": 44,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 45,
+        "max": 65,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 70,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "YW": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 20,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 30,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 31,
+        "max": 34,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 35,
+        "max": 40,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 41,
+        "max": 44,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 45,
+        "max": 65,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 70,
+        "max": 80,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 81,
+        "max": 84,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 85,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "RADG": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 25,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 35,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 36,
+        "max": 39,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 40,
+        "max": 50,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 51,
+        "max": 54,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 55,
+        "max": 75,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#000000"
+      }
+    ]
+  },
+  "DMI": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 15,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 16,
+        "max": 19,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 20,
+        "max": 30,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 31,
+        "max": 34,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 35,
+        "max": 55,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 56,
+        "max": 59,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 60,
+        "max": 65,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 70,
+        "max": 85,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "YH": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 20,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 45,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 46,
+        "max": 49,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 50,
+        "max": 65,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 70,
+        "max": 80,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 81,
+        "max": 84,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 85,
+        "max": 95,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "SC": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 4,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 5,
+        "max": 15,
+        "bgColor": "#ADFF2F",
+        "textColor": "#000000"
+      },
+      {
+        "min": 16,
+        "max": 19,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 20,
+        "max": 60,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 61,
+        "max": 64,
+        "bgColor": "#ADFF2F",
+        "textColor": "#000000"
+      },
+      {
+        "min": 65,
+        "max": 70,
+        "bgColor": "#ADFF2F",
+        "textColor": "#000000"
+      },
+      {
+        "min": 71,
+        "max": 74,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 75,
+        "max": 85,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "DOC": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 15,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 16,
+        "max": 19,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 20,
+        "max": 25,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 50,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 51,
+        "max": 54,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 55,
+        "max": 65,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 70,
+        "max": 85,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "CLAW": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 25,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 40,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 41,
+        "max": 44,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 45,
+        "max": 60,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 61,
+        "max": 64,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 65,
+        "max": 80,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 81,
+        "max": 84,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 85,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "ANGLE": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 15,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 16,
+        "max": 19,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 20,
+        "max": 25,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 40,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 41,
+        "max": 44,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 45,
+        "max": 60,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 61,
+        "max": 64,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 65,
+        "max": 80,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 81,
+        "max": 84,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 85,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "PAP": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 25,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 45,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 46,
+        "max": 49,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 50,
+        "max": 70,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 71,
+        "max": 74,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 75,
+        "max": 80,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 81,
+        "max": 84,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 85,
+        "max": 90,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 91,
+        "max": 94,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 95,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "HS": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 25,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 45,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 46,
+        "max": 49,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 50,
+        "max": 70,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 71,
+        "max": 74,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 75,
+        "max": 80,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 81,
+        "max": 84,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 85,
+        "max": 90,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 91,
+        "max": 94,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 95,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "HP": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 15,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 16,
+        "max": 19,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 20,
+        "max": 25,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 50,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 51,
+        "max": 54,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 55,
+        "max": 75,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "CEM": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 10,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 11,
+        "max": 14,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 15,
+        "max": 20,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 45,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 46,
+        "max": 49,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 50,
+        "max": 65,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 70,
+        "max": 75,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 90,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 91,
+        "max": 94,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 95,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "MILK": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 4,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 5,
+        "max": 10,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 11,
+        "max": 14,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 15,
+        "max": 20,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 30,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 31,
+        "max": 34,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 35,
+        "max": 65,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 70,
+        "max": 75,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "TEAT": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 20,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 50,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 51,
+        "max": 54,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 55,
+        "max": 75,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "UDDR": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 10,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 11,
+        "max": 14,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 15,
+        "max": 20,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 50,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 51,
+        "max": 54,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 55,
+        "max": 75,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "FL": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 10,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 11,
+        "max": 14,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 15,
+        "max": 20,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 50,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 51,
+        "max": 54,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 55,
+        "max": 75,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "MW": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 4,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 5,
+        "max": 10,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 11,
+        "max": 14,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 15,
+        "max": 20,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 45,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 46,
+        "max": 49,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 50,
+        "max": 60,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 61,
+        "max": 64,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 65,
+        "max": 75,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "MH": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 4,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 5,
+        "max": 10,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 11,
+        "max": 14,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 15,
+        "max": 20,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 45,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 46,
+        "max": 49,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 50,
+        "max": 60,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 61,
+        "max": 64,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 65,
+        "max": 75,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "$EN": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 20,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 40,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 41,
+        "max": 44,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 45,
+        "max": 75,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 90,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 91,
+        "max": 94,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 95,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "CW": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 25,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 35,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 36,
+        "max": 39,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 40,
+        "max": 65,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 70,
+        "max": 85,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "MARB": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 15,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 16,
+        "max": 19,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 20,
+        "max": 25,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 40,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 41,
+        "max": 44,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 45,
+        "max": 60,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 61,
+        "max": 64,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 65,
+        "max": 80,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 81,
+        "max": 84,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 85,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "RE": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 5,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 25,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 26,
+        "max": 29,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 30,
+        "max": 40,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 41,
+        "max": 44,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 45,
+        "max": 70,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 71,
+        "max": 74,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 75,
+        "max": 85,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "FAT": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 4,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 5,
+        "max": 10,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 11,
+        "max": 14,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 15,
+        "max": 20,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 65,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 70,
+        "max": 75,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 80,
+        "max": 85,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 86,
+        "max": 89,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 90,
+        "max": 95,
+        "bgColor": "#FFB6C1",
+        "textColor": "#000000"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "$M": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 3,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 4,
+        "max": 5,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 20,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 35,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 36,
+        "max": 39,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 40,
+        "max": 65,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 66,
+        "max": 69,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 70,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "$B": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 3,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 4,
+        "max": 5,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 20,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 35,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 36,
+        "max": 39,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 40,
+        "max": 75,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 76,
+        "max": 79,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 80,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "$C": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 2,
+        "bgColor": "#006400",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 3,
+        "max": 5,
+        "bgColor": "#32CD32",
+        "textColor": "#000000"
+      },
+      {
+        "min": 6,
+        "max": 9,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 10,
+        "max": 20,
+        "bgColor": "#90EE90",
+        "textColor": "#000000"
+      },
+      {
+        "min": 21,
+        "max": 24,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 25,
+        "max": 35,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      },
+      {
+        "min": 36,
+        "max": 39,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 40,
+        "max": 60,
+        "bgColor": "#FF0000",
+        "textColor": "#000000"
+      },
+      {
+        "min": 61,
+        "max": 64,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 65,
+        "max": 95,
+        "bgColor": "#FF0000",
+        "textColor": "#FFFFFF"
+      },
+      {
+        "min": 96,
+        "max": 100,
+        "bgColor": "#8B0000",
+        "textColor": "#FFFFFF"
+      }
+    ]
+  },
+  "$F": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 100,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      }
+    ]
+  },
+  "$W": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 100,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      }
+    ]
+  },
+  "$G": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 100,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      }
+    ]
+  },
+  "$AXH": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 100,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      }
+    ]
+  },
+  "$AXJ": {
+    "ranges": [
+      {
+        "min": 1,
+        "max": 100,
+        "bgColor": "#808080",
+        "textColor": "#000000"
+      }
+    ]
+  }
+}
+

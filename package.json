@@ -1,0 +1,59 @@
+{
+  "name": "black-angus-epd-color-coder",
+  "version": "1.0.1",
+  "description": "Black Angus EPD Color Coder - Scrape and analyze EPD data from Angus.org",
+  "main": "main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "angus",
+    "epd",
+    "scraper",
+    "electron",
+    "cattle",
+    "breeding"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "sharp": "^0.34.5"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "puppeteer": "^24.34.0"
+  },
+  "build": {
+    "appId": "com.blackangus.epdcolorcoder",
+    "productName": "Black Angus EPD Color Coder",
+    "directories": {
+      "output": "dist"
+    },
+    "publish": null,
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "config/**/*",
+      "assets/**/*",
+      "preload.js",
+      "preload-license.js",
+      "package.json",
+      "!node_modules/puppeteer/.local-chromium/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/puppeteer/.local-chromium/**/*"
+    ],
+    "mac": {
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "icon": "assets/icon.png"
+    }
+  }
+}
