@@ -4,12 +4,12 @@ Copy this into your GitHub release description:
 
 ---
 
-## 🎉 Black Angus EPD Color Coder v1.0.1
+## 🎉 Black Angus EPD Color Coder v1.0.2
 
 ### What's New
-- [List new features]
-- [List bug fixes]
-- [List improvements]
+- **Enhanced Color Coding**: Added black background with white text for EPD values that exceed the top 1% threshold for enhanced traits (CED, BW, WW, YW, RADG, Doc, Claw, Angle, HS, HP, CEM, Marb, RE, $M, $B, $C)
+- **Cow Percentile Data**: Now uses separate percentile data for cows in addition to bulls, providing accurate color coding based on animal type
+- **Improved Progress Tracking**: Progress bar now remains visible during percentile data fetching
 
 ### Installation Instructions
 

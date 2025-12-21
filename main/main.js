@@ -575,6 +575,20 @@ ipcMain.handle('get-color-criteria', async (event) => {
   }
 });
 
+// Get percentile data (bull or cow)
+ipcMain.handle('get-percentile-data', async (event, animalType) => {
+  try {
+    if (animalType === 'cow') {
+      return await percentileLookup.fetchCowPercentileBreakdowns();
+    } else {
+      return await percentileLookup.fetchPercentileBreakdowns();
+    }
+  } catch (error) {
+    console.error('[MAIN] Error fetching percentile data:', error);
+    return null;
+  }
+});
+
 // Export to Excel
 ipcMain.handle('export-to-excel', async (event, data) => {
   console.log('[MAIN] Excel export called with', data?.length || 0, 'animals');
@@ -602,6 +616,29 @@ ipcMain.handle('export-to-excel', async (event, data) => {
     const criteriaPath = path.join(__dirname, '../config/color-criteria.json');
     const criteriaData = fs.readFileSync(criteriaPath, 'utf8');
     const colorCriteria = JSON.parse(criteriaData);
+
+    // Traits that get enhanced color coding (black/white for better than top 1%)
+    const enhancedColorTraits = ['CED', 'BW', 'WW', 'YW', 'RADG', 'DOC', 'CLAW', 'ANGLE', 'HS', 'HP', 'CEM', 'MARB', 'RE', '$M', '$B', '$C'];
+    
+    // Trait direction: true = higher is better, false = lower is better
+    const traitDirection = {
+      'CED': true, 'BW': false, 'WW': true, 'YW': true, 'RADG': true, 'DOC': true,
+      'CLAW': false, 'ANGLE': false, 'HS': false, 'HP': true, 'CEM': true,
+      'MARB': true, 'RE': true, '$M': true, '$B': true, '$C': true
+    };
+
+    // Fetch percentile data for bulls and cows
+    let bullPercentileData = null;
+    let cowPercentileData = null;
+    try {
+      [bullPercentileData, cowPercentileData] = await Promise.all([
+        percentileLookup.fetchPercentileBreakdowns(),
+        percentileLookup.fetchCowPercentileBreakdowns()
+      ]);
+    } catch (error) {
+      console.error('[MAIN] Error fetching percentile data for Excel export:', error);
+      // Continue without percentile data - will fall back to normal color coding
+    }
 
     // Create workbook
     const workbook = new ExcelJS.Workbook();
@@ -641,7 +678,10 @@ ipcMain.handle('export-to-excel', async (event, data) => {
 
     // Create header row with additional info columns
     const additionalInfoColumns = ['Name', 'Sire', 'Dam', 'MGS', 'BD', 'Tattoo'];
-    const headers = ['Registration Number', ...additionalInfoColumns, ...sortedTraits];
+    // Add headers for EPD columns and percent rank columns
+    const epdHeaders = sortedTraits.map(trait => trait);
+    const percentRankHeaders = sortedTraits.map(trait => `${trait} %Rank`);
+    const headers = ['Registration Number', ...additionalInfoColumns, ...epdHeaders, ...percentRankHeaders];
     worksheet.addRow(headers);
 
     // Style header row
@@ -669,13 +709,40 @@ ipcMain.handle('export-to-excel', async (event, data) => {
         animal.data.additionalInfo?.tattoo || '' // Tattoo
       ];
 
-      // Add trait values
+      // Add EPD values (without percent rank)
       sortedTraits.forEach(trait => {
         const traitData = animal.data.epdValues?.[trait];
         if (traitData) {
-          const epd = traitData.epd || 'N/A';
-          const rank = traitData.percentRank || 'N/A';
-          row.push(`${epd} (${rank}%)`);
+          let epd = traitData.epd || 'N/A';
+          // Format EPD to 2 decimal places if it's a number
+          if (epd !== 'N/A' && typeof epd === 'string') {
+            // Remove "I" prefix if present (inferred value)
+            const cleanedEPD = epd.replace(/^I\s*/i, '').trim();
+            const epdNum = parseFloat(cleanedEPD);
+            if (!isNaN(epdNum)) {
+              // Preserve sign (+ or -) and format to 2 decimals
+              const sign = epdNum >= 0 ? '+' : '';
+              epd = sign + epdNum.toFixed(2);
+            }
+          }
+          row.push(epd);
+        } else {
+          row.push('N/A');
+        }
+      });
+
+      // Add percent rank values in decimal form (no colors)
+      sortedTraits.forEach(trait => {
+        const traitData = animal.data.epdValues?.[trait];
+        if (traitData && traitData.percentRank && traitData.percentRank !== 'N/A') {
+          // Convert percent rank to decimal (e.g., 75% -> 0.75)
+          const rankNum = parseFloat(traitData.percentRank);
+          if (!isNaN(rankNum)) {
+            const decimalRank = (rankNum / 100).toFixed(4);
+            row.push(decimalRank);
+          } else {
+            row.push('N/A');
+          }
         } else {
           row.push('N/A');
         }
@@ -683,7 +750,7 @@ ipcMain.handle('export-to-excel', async (event, data) => {
 
       const dataRow = worksheet.addRow(row);
 
-      // Apply color coding to trait cells (only for traits in the predefined list)
+      // Apply color coding to EPD trait cells (only for traits in the predefined list)
       sortedTraits.forEach((trait, traitIdx) => {
         // +8 for: reg num (1) + Name, Sire, Dam, MGS, BD, Tattoo (6) + trait index (1)
         const cell = dataRow.getCell(traitIdx + 8);
@@ -692,23 +759,82 @@ ipcMain.handle('export-to-excel', async (event, data) => {
         // Only apply color coding if trait is in the predefined list
         if (traitOrder.includes(trait) && traitData && traitData.percentRank) {
           const rank = parseInt(traitData.percentRank, 10);
-          const traitCriteria = colorCriteria[trait];
           
-          if (traitCriteria && traitCriteria.ranges) {
-            for (const range of traitCriteria.ranges) {
-              if (rank >= range.min && rank <= range.max) {
-                // Convert hex to ARGB format
-                const bgColor = range.bgColor.replace('#', 'FF');
-                const textColor = range.textColor.replace('#', 'FF');
+          // Determine animal type and get appropriate percentile data
+          const sex = (animal.data.sex || '').toUpperCase();
+          const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+          const percentileData = isCow ? cowPercentileData : bullPercentileData;
+          
+          // Check if this trait should get enhanced color coding and if value is better than top 1%
+          let useEnhancedColor = false;
+          if (enhancedColorTraits.includes(trait) && rank >= 1 && rank <= 10 && percentileData) {
+            // Get the 1st percentile threshold
+            const normalizedTrait = trait.toUpperCase();
+            const traitPercentiles = percentileData[normalizedTrait];
+            
+            if (traitPercentiles && traitPercentiles.length > 0) {
+              // Find the 1st percentile entry
+              const firstPercentileEntry = traitPercentiles.find(entry => entry.percentile === 1);
+              const threshold = firstPercentileEntry ? firstPercentileEntry.epdValue : traitPercentiles[0].epdValue;
+              
+              if (threshold !== null && threshold !== undefined && traitData.epd) {
+                // Parse EPD value
+                let epdValue = null;
+                const epdStr = typeof traitData.epd === 'string' ? traitData.epd.replace(/^I\s*/i, '').trim() : traitData.epd;
+                const epdNum = parseFloat(epdStr);
+                if (!isNaN(epdNum)) {
+                  epdValue = epdNum;
+                }
                 
-                cell.fill = {
-                  type: 'pattern',
-                  pattern: 'solid',
-                  fgColor: { argb: bgColor }
-                };
-                cell.font = { color: { argb: textColor } };
-                break;
+                if (epdValue !== null) {
+                  const isHigherBetter = traitDirection[trait] !== false; // Default to true if not specified
+                  
+                  // Check if EPD value is better than threshold
+                  const isBetter = isHigherBetter ? (epdValue > threshold) : (epdValue < threshold);
+                  
+                  if (isBetter) {
+                    useEnhancedColor = true;
+                    // Use black background with white text for better-than-top-1%
+                    cell.fill = {
+                      type: 'pattern',
+                      pattern: 'solid',
+                      fgColor: { argb: 'FF000000' }
+                    };
+                    cell.font = { color: { argb: 'FFFFFFFF' } };
+                  }
+                }
               }
+            }
+          }
+          
+          // If not using enhanced color, use normal color coding
+          if (!useEnhancedColor) {
+            const traitCriteria = colorCriteria[trait];
+            
+            if (traitCriteria && traitCriteria.ranges) {
+              for (const range of traitCriteria.ranges) {
+                if (rank >= range.min && rank <= range.max) {
+                  // Convert hex to ARGB format
+                  const bgColor = range.bgColor.replace('#', 'FF');
+                  const textColor = range.textColor.replace('#', 'FF');
+                  
+                  cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: bgColor }
+                  };
+                  cell.font = { color: { argb: textColor } };
+                  break;
+                }
+              }
+            } else {
+              // Traits not in the list get white background, black text
+              cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFFFFFFF' }
+              };
+              cell.font = { color: { argb: 'FF000000' } };
             }
           }
         } else {
@@ -721,17 +847,35 @@ ipcMain.handle('export-to-excel', async (event, data) => {
           cell.font = { color: { argb: 'FF000000' } };
         }
       });
+
+      // Set percent rank columns to white background, black text (no colors)
+      sortedTraits.forEach((trait, traitIdx) => {
+        // Column index (1-based): reg num (1) + additional info (6) + EPD columns (sortedTraits.length) + percent rank index + 1
+        // Column 1: Registration Number, Columns 2-7: Additional info, Columns 8+: EPD columns, then Percent rank columns
+        const percentRankColIdx = 1 + 6 + sortedTraits.length + traitIdx + 1;
+        const cell = dataRow.getCell(percentRankColIdx);
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFFFF' }
+        };
+        cell.font = { color: { argb: 'FF000000' } };
+      });
     });
 
     // Set column widths
+    const numAdditionalInfoCols = 6; // Name, Sire, Dam, MGS, BD, Tattoo
+    const numEPDCols = sortedTraits.length;
     worksheet.columns.forEach((column, index) => {
       if (index === 0) {
         column.width = 20; // Registration Number
-      } else if (index >= 1 && index <= 7) {
+      } else if (index >= 1 && index <= numAdditionalInfoCols) {
         // Additional info columns: Name, Sire, Dam, MGS, BD, Tattoo
         column.width = 25;
+      } else if (index > numAdditionalInfoCols && index <= numAdditionalInfoCols + numEPDCols) {
+        column.width = 15; // EPD columns
       } else {
-        column.width = 15; // Trait columns
+        column.width = 12; // Percent rank columns (slightly narrower)
       }
     });
 

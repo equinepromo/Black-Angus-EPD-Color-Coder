@@ -8,6 +8,16 @@ const traitOrder = [
   'MW', 'MH', '$EN', 'CW', 'MARB', 'RE', 'FAT', '$M', '$B', '$C'
 ];
 
+// Traits that get enhanced color coding (black/white for better than top 1%)
+const enhancedColorTraits = ['CED', 'BW', 'WW', 'YW', 'RADG', 'DOC', 'CLAW', 'ANGLE', 'HS', 'HP', 'CEM', 'MARB', 'RE', '$M', '$B', '$C'];
+
+// Trait direction: true = higher is better, false = lower is better
+const traitDirection = {
+  'CED': true, 'BW': false, 'WW': true, 'YW': true, 'RADG': true, 'DOC': true,
+  'CLAW': false, 'ANGLE': false, 'HS': false, 'HP': true, 'CEM': true,
+  'MARB': true, 'RE': true, '$M': true, '$B': true, '$C': true
+};
+
 // DOM elements
 const registrationInput = document.getElementById('registration-input');
 const scrapeBtn = document.getElementById('scrape-btn');
@@ -155,7 +165,8 @@ scrapeBtn.addEventListener('click', async () => {
     }
 
     scrapedData = results;
-    displayResults(results);
+    // Await displayResults so progress bar is managed correctly
+    await displayResults(results);
     copyTableBtn.disabled = false;
     exportExcelBtn.disabled = results.length === 0;
     
@@ -172,9 +183,10 @@ scrapeBtn.addEventListener('click', async () => {
     }
   } catch (error) {
     alert('Error during scraping: ' + error.message);
+    hideProgress();
   } finally {
     scrapeBtn.disabled = false;
-    hideProgress();
+    // Don't hide progress here - let displayResults manage it since it needs to fetch percentile data
   }
 });
 
@@ -274,7 +286,8 @@ function hideMatingProgress() {
 
 // Get color for a trait based on % rank
 // Only applies colors to traits in the traitOrder list
-function getColorForTrait(traitName, percentRank) {
+// Optional parameters: epdValue (number), percentileData (object), animalType ('bull' or 'cow')
+function getColorForTrait(traitName, percentRank, epdValue = null, percentileData = null, animalType = 'bull') {
   // If trait is not in the predefined list, return default (no color coding)
   if (!traitOrder.includes(traitName)) {
     return { bgColor: '#FFFFFF', textColor: '#000000', noColorCode: true };
@@ -287,6 +300,31 @@ function getColorForTrait(traitName, percentRank) {
   const rank = typeof percentRank === 'string' ? parseInt(percentRank, 10) : percentRank;
   if (isNaN(rank) || rank < 1 || rank > 100) {
     return { bgColor: '#808080', textColor: '#000000' };
+  }
+
+  // Check if this trait should get enhanced color coding and if value is better than top 1%
+  if (enhancedColorTraits.includes(traitName) && rank >= 1 && rank <= 10 && epdValue !== null && percentileData) {
+    // Get the 1st percentile threshold
+    const normalizedTrait = traitName.toUpperCase();
+    const traitPercentiles = percentileData[normalizedTrait];
+    
+    if (traitPercentiles && traitPercentiles.length > 0) {
+      // Find the 1st percentile entry
+      const firstPercentileEntry = traitPercentiles.find(entry => entry.percentile === 1);
+      const threshold = firstPercentileEntry ? firstPercentileEntry.epdValue : traitPercentiles[0].epdValue;
+      
+      if (threshold !== null && threshold !== undefined) {
+        const isHigherBetter = traitDirection[traitName] !== false; // Default to true if not specified
+        
+        // Check if EPD value is better than threshold
+        const isBetter = isHigherBetter ? (epdValue > threshold) : (epdValue < threshold);
+        
+        if (isBetter) {
+          // Return black background with white text for better-than-top-1%
+          return { bgColor: '#000000', textColor: '#FFFFFF' };
+        }
+      }
+    }
   }
 
   const traitCriteria = colorCriteria[traitName];
@@ -306,7 +344,7 @@ function getColorForTrait(traitName, percentRank) {
   return { bgColor: '#808080', textColor: '#000000' };
 }
 
-function displayResults(results) {
+async function displayResults(results) {
   mainResultsContainer.innerHTML = '';
 
   // Remove internal flags from data before displaying
@@ -317,6 +355,33 @@ function displayResults(results) {
     }
     return r;
   });
+
+  // Show progress while fetching percentile data
+  // Make sure progress bar is visible and update it
+  if (progressSection && progressFill && progressText) {
+    progressSection.style.display = 'block';
+    progressFill.style.width = '50%';
+    progressText.textContent = 'Fetching percentile data...';
+  }
+
+  // Fetch percentile data for bulls and cows (fetch both in parallel)
+  let bullPercentileData = null;
+  let cowPercentileData = null;
+  try {
+    [bullPercentileData, cowPercentileData] = await Promise.all([
+      window.electronAPI.getPercentileData('bull'),
+      window.electronAPI.getPercentileData('cow')
+    ]);
+  } catch (error) {
+    console.error('Error fetching percentile data:', error);
+    // Continue without percentile data - will fall back to normal color coding
+  }
+  
+  // Update progress to show we're processing results
+  if (progressSection && progressFill && progressText) {
+    progressFill.style.width = '80%';
+    progressText.textContent = 'Processing results...';
+  }
 
   // Show errors first if any
   const errors = results.filter(r => !r.success || (r.success && (!r.data || !r.data.epdValues)));
@@ -460,8 +525,24 @@ function displayResults(results) {
         const rank = traitData.percentRank || 'N/A';
         cell.textContent = `${epd} (${rank}%)`;
         
+        // Determine animal type and get appropriate percentile data
+        const sex = (result.data.sex || '').toUpperCase();
+        const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+        const animalType = isCow ? 'cow' : 'bull';
+        const percentileData = isCow ? cowPercentileData : bullPercentileData;
+        
+        // Parse EPD value for enhanced color coding
+        let epdValue = null;
+        if (epd !== 'N/A' && typeof epd === 'string') {
+          const cleanedEPD = epd.replace(/^I\s*/i, '').trim();
+          const epdNum = parseFloat(cleanedEPD);
+          if (!isNaN(epdNum)) {
+            epdValue = epdNum;
+          }
+        }
+        
         // Apply color coding only if trait is in the predefined list
-        const colors = getColorForTrait(trait, rank);
+        const colors = getColorForTrait(trait, rank, epdValue, percentileData, animalType);
         cell.style.backgroundColor = colors.bgColor;
         cell.style.color = colors.textColor;
         // Set bgcolor attribute for Excel compatibility (Excel reads this better than CSS)
@@ -506,11 +587,36 @@ function displayResults(results) {
     });
     mainResultsContainer.appendChild(errorDiv);
   }
+
+  // Update progress to 100% and hide after all processing is complete
+  if (progressSection) {
+    progressFill.style.width = '100%';
+    progressText.textContent = 'Complete';
+    // Small delay to show completion before hiding
+    setTimeout(() => {
+      hideProgress();
+    }, 300);
+  } else {
+    hideProgress();
+  }
 }
 
-function displayMatingResults(data) {
+async function displayMatingResults(data) {
   // Clear existing results
   matingResultsContainer.innerHTML = '';
+
+  // Fetch percentile data for bulls and cows (fetch both in parallel)
+  let bullPercentileData = null;
+  let cowPercentileData = null;
+  try {
+    [bullPercentileData, cowPercentileData] = await Promise.all([
+      window.electronAPI.getPercentileData('bull'),
+      window.electronAPI.getPercentileData('cow')
+    ]);
+  } catch (error) {
+    console.error('Error fetching percentile data for mating results:', error);
+    // Continue without percentile data - will fall back to normal color coding
+  }
 
   const matingSection = document.createElement('div');
   matingSection.id = 'mating-results-section';
@@ -608,9 +714,16 @@ function displayMatingResults(data) {
     sireCell.style.border = '1px solid #000';
     sireCell.style.textAlign = 'center';
     
-    // Apply color coding based on sire percentile rank
+    // Apply color coding based on sire percentile rank (sire is always a bull)
     if (sirePercentRank !== null && sirePercentRank !== undefined && sirePercentRank !== 'N/A') {
-      const colors = getColorForTrait(trait, sirePercentRank.toString());
+      let sireEPDValue = null;
+      if (sireDisplay !== 'N/A') {
+        const sireNum = parseFloat(sireDisplay);
+        if (!isNaN(sireNum)) {
+          sireEPDValue = sireNum;
+        }
+      }
+      const colors = getColorForTrait(trait, sirePercentRank.toString(), sireEPDValue, bullPercentileData, 'bull');
       sireCell.style.backgroundColor = colors.bgColor;
       sireCell.style.color = colors.textColor;
     } else {
@@ -640,9 +753,16 @@ function displayMatingResults(data) {
     damCell.style.border = '1px solid #000';
     damCell.style.textAlign = 'center';
     
-    // Apply color coding based on dam percentile rank
+    // Apply color coding based on dam percentile rank (dam is always a cow)
     if (damPercentRank !== null && damPercentRank !== undefined && damPercentRank !== 'N/A') {
-      const colors = getColorForTrait(trait, damPercentRank.toString());
+      let damEPDValue = null;
+      if (damDisplay !== 'N/A') {
+        const damNum = parseFloat(damDisplay);
+        if (!isNaN(damNum)) {
+          damEPDValue = damNum;
+        }
+      }
+      const colors = getColorForTrait(trait, damPercentRank.toString(), damEPDValue, cowPercentileData, 'cow');
       damCell.style.backgroundColor = colors.bgColor;
       damCell.style.color = colors.textColor;
     } else {
@@ -670,10 +790,17 @@ function displayMatingResults(data) {
     expectedCell.style.border = '1px solid #000';
     expectedCell.style.textAlign = 'center';
 
-    // Apply color coding based on estimated percentile rank
+    // Apply color coding based on estimated percentile rank (expected calf uses bull data)
     const estimatedRank = calcData.estimatedPercentileRank;
     if (estimatedRank !== null && estimatedRank !== undefined && estimatedRank !== 'N/A') {
-      const colors = getColorForTrait(trait, estimatedRank.toString());
+      let expectedEPDValue = null;
+      if (epdDisplay !== 'N/A') {
+        const epdNum = parseFloat(epdDisplay);
+        if (!isNaN(epdNum)) {
+          expectedEPDValue = epdNum;
+        }
+      }
+      const colors = getColorForTrait(trait, estimatedRank.toString(), expectedEPDValue, bullPercentileData, 'bull');
       expectedCell.style.backgroundColor = colors.bgColor;
       expectedCell.style.color = colors.textColor;
     } else {

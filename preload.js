@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   activateLicense: (licenseKey) => ipcRenderer.invoke('activate-license', licenseKey),
   deactivateLicense: () => ipcRenderer.invoke('deactivate-license'),
   getCachedAnimals: () => ipcRenderer.invoke('get-cached-animals'),
+  getPercentileData: (animalType) => ipcRenderer.invoke('get-percentile-data', animalType),
   // Update APIs
   checkForUpdates: (showDialog) => ipcRenderer.invoke('check-for-updates', showDialog),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
