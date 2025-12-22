@@ -698,6 +698,28 @@ ipcMain.handle('export-to-excel', async (event, data) => {
     data.forEach(animal => {
       if (!animal.success || !animal.data) return;
 
+      // Parse birth date for Excel (format: MM/DD/YYYY)
+      let birthDateValue = '';
+      let birthDateObj = null;
+      const birthDateStr = animal.data.additionalInfo?.birthDate || '';
+      if (birthDateStr) {
+        // Parse MM/DD/YYYY format
+        const dateMatch = birthDateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (dateMatch) {
+          const month = parseInt(dateMatch[1], 10) - 1; // JavaScript months are 0-indexed
+          const day = parseInt(dateMatch[2], 10);
+          const year = parseInt(dateMatch[3], 10);
+          birthDateObj = new Date(year, month, day);
+          if (!isNaN(birthDateObj.getTime())) {
+            birthDateValue = birthDateObj;
+          } else {
+            birthDateValue = birthDateStr; // Fallback to string if invalid
+          }
+        } else {
+          birthDateValue = birthDateStr; // Keep as string if format doesn't match
+        }
+      }
+
       // Build row with registration number and additional info
       const row = [
         animal.registrationNumber || '',
@@ -705,27 +727,31 @@ ipcMain.handle('export-to-excel', async (event, data) => {
         animal.data.additionalInfo?.sire || '', // Sire
         animal.data.additionalInfo?.dam || '', // Dam
         animal.data.additionalInfo?.mgs || '', // MGS
-        animal.data.additionalInfo?.birthDate || '', // BD
+        birthDateValue, // BD (Date object or string)
         animal.data.additionalInfo?.tattoo || '' // Tattoo
       ];
 
-      // Add EPD values (without percent rank)
+      // Add EPD values (without percent rank) - store as numbers for Excel
       sortedTraits.forEach(trait => {
         const traitData = animal.data.epdValues?.[trait];
-        if (traitData) {
-          let epd = traitData.epd || 'N/A';
-          // Format EPD to 2 decimal places if it's a number
-          if (epd !== 'N/A' && typeof epd === 'string') {
+        if (traitData && traitData.epd) {
+          let epd = traitData.epd;
+          // Parse EPD to number if possible
+          if (typeof epd === 'string') {
             // Remove "I" prefix if present (inferred value)
             const cleanedEPD = epd.replace(/^I\s*/i, '').trim();
             const epdNum = parseFloat(cleanedEPD);
             if (!isNaN(epdNum)) {
-              // Preserve sign (+ or -) and format to 2 decimals
-              const sign = epdNum >= 0 ? '+' : '';
-              epd = sign + epdNum.toFixed(2);
+              // Store as number (no + prefix, Excel will handle formatting)
+              row.push(epdNum);
+            } else {
+              row.push('N/A');
             }
+          } else if (typeof epd === 'number') {
+            row.push(epd);
+          } else {
+            row.push('N/A');
           }
-          row.push(epd);
         } else {
           row.push('N/A');
         }
@@ -749,6 +775,22 @@ ipcMain.handle('export-to-excel', async (event, data) => {
       });
 
       const dataRow = worksheet.addRow(row);
+
+      // Format BD column (column 6, 1-based) as date
+      const bdCell = dataRow.getCell(6); // BD is the 6th column (after Registration Number)
+      if (bdCell.value instanceof Date) {
+        bdCell.numFmt = 'mm/dd/yyyy';
+      }
+
+      // Format EPD cells as numbers with 2 decimal places
+      sortedTraits.forEach((trait, traitIdx) => {
+        // +8 for: reg num (1) + Name, Sire, Dam, MGS, BD, Tattoo (6) + trait index (1)
+        const cell = dataRow.getCell(traitIdx + 8);
+        // If cell contains a number, format it with 2 decimal places
+        if (typeof cell.value === 'number') {
+          cell.numFmt = '0.00';
+        }
+      });
 
       // Apply color coding to EPD trait cells (only for traits in the predefined list)
       sortedTraits.forEach((trait, traitIdx) => {

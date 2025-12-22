@@ -581,9 +581,29 @@ async function displayResults(results) {
       // Set bgcolor attribute for Excel compatibility
       cell.setAttribute('bgcolor', '#FFFFFF');
       cell.dataset.columnName = columnName;
-      // Store sort value for numeric values (like dates)
-      const cellNum = parseFloat(cellText);
-      cell.dataset.sortValue = !isNaN(cellNum) ? cellNum.toString() : '';
+      
+      // Store sort value - for BD, parse as date; for others, try numeric
+      if (columnName === 'BD' && cellText) {
+        // Parse MM/DD/YYYY format to Date timestamp for sorting
+        const dateMatch = cellText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (dateMatch) {
+          const month = parseInt(dateMatch[1], 10) - 1; // JavaScript months are 0-indexed
+          const day = parseInt(dateMatch[2], 10);
+          const year = parseInt(dateMatch[3], 10);
+          const dateObj = new Date(year, month, day);
+          if (!isNaN(dateObj.getTime())) {
+            cell.dataset.sortValue = dateObj.getTime().toString(); // Store as timestamp
+          } else {
+            cell.dataset.sortValue = '';
+          }
+        } else {
+          cell.dataset.sortValue = '';
+        }
+      } else {
+        // For other columns, try numeric
+        const cellNum = parseFloat(cellText);
+        cell.dataset.sortValue = !isNaN(cellNum) ? cellNum.toString() : '';
+      }
       row.appendChild(cell);
     });
 
@@ -852,13 +872,32 @@ async function displayResults(results) {
         const aSortValue = aCell.dataset.sortValue || '';
         const bSortValue = bCell.dataset.sortValue || '';
         
-        if (aSortValue !== '' && bSortValue !== '') {
-          const aNum = parseFloat(aSortValue);
-          const bNum = parseFloat(bSortValue);
-          if (!isNaN(aNum) && !isNaN(bNum)) {
-            comparison = aNum - bNum;
+        // Handle empty values - put them at the end
+        if (aSortValue === '' && bSortValue === '') {
+          comparison = 0;
+        } else if (aSortValue === '') {
+          comparison = 1; // N/A/empty values go to the end
+        } else if (bSortValue === '') {
+          comparison = -1; // N/A/empty values go to the end
+        } else if (aSortValue !== '' && bSortValue !== '') {
+          // Check if this is a date column (BD) - sort values are timestamps
+          if (columnName === 'BD') {
+            const aTimestamp = parseInt(aSortValue, 10);
+            const bTimestamp = parseInt(bSortValue, 10);
+            if (!isNaN(aTimestamp) && !isNaN(bTimestamp)) {
+              comparison = aTimestamp - bTimestamp;
+            } else {
+              comparison = aCell.textContent.trim().localeCompare(bCell.textContent.trim());
+            }
           } else {
-            comparison = aCell.textContent.trim().localeCompare(bCell.textContent.trim());
+            // For other columns, try numeric
+            const aNum = parseFloat(aSortValue);
+            const bNum = parseFloat(bSortValue);
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+              comparison = aNum - bNum;
+            } else {
+              comparison = aCell.textContent.trim().localeCompare(bCell.textContent.trim());
+            }
           }
         } else {
           // Fallback to text comparison

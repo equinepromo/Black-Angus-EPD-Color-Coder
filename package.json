@@ -1,6 +1,6 @@
 {
   "name": "black-angus-epd-color-coder",
-  "version": "1.0.3",
+  "version": "1.0.31",
   "description": "Black Angus EPD Color Coder - Scrape and analyze EPD data from Angus.org",
   "main": "main/main.js",
   "scripts": {
