@@ -365,9 +365,18 @@ table td {
 }
 
 /* EPD Data Table Styles */
+.table-wrapper {
+    position: relative;
+    width: 100%;
+    overflow-x: auto;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
 .epd-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     margin: 20px 0;
     font-size: 14px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -376,7 +385,7 @@ table td {
 .epd-table thead {
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 15;
 }
 
 .epd-table th {
@@ -385,8 +394,20 @@ table td {
     padding: 10px 8px;
     border: 1px solid #000;
     text-align: center;
+}
+
+.epd-table th.sticky-name-column {
     position: sticky;
+    left: 0;
     top: 0;
+    z-index: 25;
+    background-color: #E0E0E0;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+.epd-table th.sortable-header:hover {
+    background-color: #d0d0d0;
+    cursor: pointer;
 }
 
 .epd-table td {
@@ -394,9 +415,25 @@ table td {
     border: 1px solid #000;
     text-align: center;
     white-space: nowrap;
+    background-color: #FFFFFF;
+}
+
+.epd-table td.sticky-name-column {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
 }
 
 .epd-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.epd-table tbody tr:nth-child(even) td {
+    background-color: #f9f9f9;
+}
+
+.epd-table tbody tr:nth-child(even) td.sticky-name-column {
     background-color: #f9f9f9;
 }
 
@@ -404,10 +441,50 @@ table td {
     background-color: #f0f0f0;
 }
 
+.epd-table tbody tr:hover td {
+    background-color: #f0f0f0;
+}
+
+.epd-table tbody tr:hover td.sticky-name-column {
+    background-color: #f0f0f0;
+}
+
 /* Ensure table is scrollable horizontally if needed */
 .results-section {
     overflow-x: auto;
     max-width: 100%;
+}
+
+.table-controls {
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #e8e8e8;
+}
+
+.column-visibility-menu {
+    display: none;
+    position: absolute;
+    background-color: white;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    padding: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    max-height: 400px;
+    overflow-y: auto;
+    min-width: 200px;
+    margin-top: 5px;
+}
+
+.column-visibility-menu label {
+    cursor: pointer;
+    user-select: none;
+}
+
+.column-visibility-menu label:hover {
+    color: #32CD32;
 }
 
 /* Update Notification Styles */

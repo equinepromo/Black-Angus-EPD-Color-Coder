@@ -1,16 +1,16 @@
 {
   "name": "black-angus-epd-color-coder",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Black Angus EPD Color Coder - Scrape and analyze EPD data from Angus.org",
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --publish never",
-    "build:mac": "electron-builder --mac --publish never",
-    "build:win": "electron-builder --win --publish never",
-    "build:linux": "electron-builder --linux --publish never",
-    "build:all": "electron-builder --mac --win --linux --publish never",
-    "build:publish": "electron-builder --publish always"
+    "build": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
+    "build:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
+    "build:win": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
+    "build:linux": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --linux --publish never",
+    "build:all": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --win --linux --publish never",
+    "build:publish": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish always"
   },
   "keywords": [
     "angus",
@@ -59,13 +59,18 @@
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.utilities",
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "identity": null,
+      "hardenedRuntime": false,
+      "artifactName": "Black-Angus-EPD-Color-Coder-${version}-${arch}-mac.${ext}"
     },
     "win": {
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "artifactName": "Black-Angus-EPD-Color-Coder-Setup-${version}.${ext}"
     },
     "linux": {
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "artifactName": "Black-Angus-EPD-Color-Coder-${version}.${ext}"
     }
   }
 }

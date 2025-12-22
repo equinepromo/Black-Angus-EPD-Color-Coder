@@ -1,6 +1,29 @@
 let scrapedData = [];
 let colorCriteria = null;
 
+// Column visibility preferences storage
+const COLUMN_VISIBILITY_STORAGE_KEY = 'epd-table-column-visibility';
+
+function loadColumnVisibilityPreferences() {
+  try {
+    const saved = localStorage.getItem(COLUMN_VISIBILITY_STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('Error loading column visibility preferences:', error);
+  }
+  return {};
+}
+
+function saveColumnVisibilityPreferences(preferences) {
+  try {
+    localStorage.setItem(COLUMN_VISIBILITY_STORAGE_KEY, JSON.stringify(preferences));
+  } catch (error) {
+    console.error('Error saving column visibility preferences:', error);
+  }
+}
+
 // Define the trait order - only traits in this list will be color coded
 const traitOrder = [
   'CED', 'BW', 'WW', 'YW', 'RADG', 'DMI', 'YH', 'SC', 'DOC', 'CLAW',
@@ -303,7 +326,8 @@ function getColorForTrait(traitName, percentRank, epdValue = null, percentileDat
   }
 
   // Check if this trait should get enhanced color coding and if value is better than top 1%
-  if (enhancedColorTraits.includes(traitName) && rank >= 1 && rank <= 10 && epdValue !== null && percentileData) {
+  // Only apply black color for rank <= 1 (top 1%)
+  if (enhancedColorTraits.includes(traitName) && rank <= 1 && epdValue !== null && percentileData) {
     // Get the 1st percentile threshold
     const normalizedTrait = traitName.toUpperCase();
     const traitPercentiles = percentileData[normalizedTrait];
@@ -442,7 +466,8 @@ async function displayResults(results) {
   const table = document.createElement('table');
   table.id = 'epd-data-table';
   table.className = 'epd-table';
-  table.style.borderCollapse = 'collapse';
+  table.style.borderCollapse = 'separate';
+  table.style.borderSpacing = '0';
   table.style.width = '100%';
   table.style.marginTop = '20px';
 
@@ -453,16 +478,47 @@ async function displayResults(results) {
   headerRow.style.fontWeight = 'bold';
   headerRow.setAttribute('bgcolor', '#E0E0E0'); // Excel compatibility
 
-  // Define additional info columns (before EPD traits)
-  const additionalInfoColumns = ['Name', 'Sire', 'Dam', 'MGS', 'BD', 'Tattoo'];
-  const headers = ['Registration Number', ...additionalInfoColumns, ...sortedTraits];
-  headers.forEach(header => {
+  // Define additional info columns (Name first, then Registration Number, then others)
+  const additionalInfoColumns = ['Sire', 'Dam', 'MGS', 'BD', 'Tattoo'];
+  const headers = ['Name', 'Registration Number', ...additionalInfoColumns, ...sortedTraits];
+  
+  // Load saved column visibility preferences
+  const savedPreferences = loadColumnVisibilityPreferences();
+  
+  // Store column metadata for sorting and visibility
+  const columnMetadata = {};
+  headers.forEach((header, index) => {
+    // Check if we have a saved preference for this column, default to true
+    const isVisible = savedPreferences.hasOwnProperty(header) 
+      ? savedPreferences[header] 
+      : true;
+    columnMetadata[header] = { index, visible: isVisible };
+  });
+
+  headers.forEach((header, index) => {
     const th = document.createElement('th');
     th.textContent = header;
     th.style.padding = '8px';
     th.style.border = '1px solid #000';
     th.style.textAlign = 'center';
     th.setAttribute('bgcolor', '#E0E0E0'); // Excel compatibility
+    th.dataset.columnName = header;
+    
+    // Make Name column sticky (both left and top)
+    if (header === 'Name') {
+      th.classList.add('sticky-name-column');
+      th.style.position = 'sticky';
+      th.style.left = '0';
+      th.style.top = '0';
+      th.style.zIndex = '25';
+      th.style.backgroundColor = '#E0E0E0';
+    }
+    
+    // Make all headers clickable for sorting
+    th.style.cursor = 'pointer';
+    th.classList.add('sortable-header');
+    th.title = 'Click to sort';
+    
     headerRow.appendChild(th);
   });
   thead.appendChild(headerRow);
@@ -470,20 +526,42 @@ async function displayResults(results) {
 
   // Create body
   const tbody = document.createElement('tbody');
-  validResults.forEach(result => {
+  validResults.forEach((result, rowIndex) => {
     const row = document.createElement('tr');
+    row.dataset.rowIndex = rowIndex;
+    
+    // Name column (first) - sticky
+    const nameCell = document.createElement('td');
+    nameCell.textContent = result.data.animalName || '';
+    nameCell.style.padding = '8px';
+    nameCell.style.border = '1px solid #000';
+    nameCell.style.textAlign = 'center';
+    nameCell.style.backgroundColor = '#FFFFFF';
+    nameCell.style.color = '#000000';
+    nameCell.classList.add('sticky-name-column');
+    nameCell.style.position = 'sticky';
+    nameCell.style.left = '0';
+    nameCell.style.zIndex = '10';
+    nameCell.style.backgroundColor = rowIndex % 2 === 0 ? '#FFFFFF' : '#f9f9f9';
+    nameCell.setAttribute('bgcolor', '#FFFFFF');
+    nameCell.dataset.columnName = 'Name';
+    row.appendChild(nameCell);
     
     // Registration Number
     const regNumCell = document.createElement('td');
-    regNumCell.textContent = result.registrationNumber || '';
+    const regNumText = result.registrationNumber || '';
+    regNumCell.textContent = regNumText;
     regNumCell.style.padding = '8px';
     regNumCell.style.border = '1px solid #000';
     regNumCell.style.textAlign = 'center';
+    regNumCell.dataset.columnName = 'Registration Number';
+    // Store sort value for numeric registration numbers
+    const regNumVal = parseFloat(regNumText);
+    regNumCell.dataset.sortValue = !isNaN(regNumVal) ? regNumVal.toString() : '';
     row.appendChild(regNumCell);
 
     // Additional info columns
     const additionalInfoMap = {
-      'Name': result.data.animalName || '',
       'Sire': result.data.additionalInfo?.sire || '',
       'Dam': result.data.additionalInfo?.dam || '',
       'MGS': result.data.additionalInfo?.mgs || '',
@@ -493,7 +571,8 @@ async function displayResults(results) {
     
     additionalInfoColumns.forEach(columnName => {
       const cell = document.createElement('td');
-      cell.textContent = additionalInfoMap[columnName] || '';
+      const cellText = additionalInfoMap[columnName] || '';
+      cell.textContent = cellText;
       cell.style.padding = '8px';
       cell.style.border = '1px solid #000';
       cell.style.textAlign = 'center';
@@ -501,21 +580,27 @@ async function displayResults(results) {
       cell.style.color = '#000000';
       // Set bgcolor attribute for Excel compatibility
       cell.setAttribute('bgcolor', '#FFFFFF');
+      cell.dataset.columnName = columnName;
+      // Store sort value for numeric values (like dates)
+      const cellNum = parseFloat(cellText);
+      cell.dataset.sortValue = !isNaN(cellNum) ? cellNum.toString() : '';
       row.appendChild(cell);
     });
 
     // Trait values
     sortedTraits.forEach(trait => {
       const cell = document.createElement('td');
+      cell.dataset.columnName = trait;
       const traitData = result.data.epdValues[trait];
       
       if (traitData) {
         // Format EPD to 2 decimal places
         let epd = traitData.epd || 'N/A';
+        let epdNum = null;
         if (epd !== 'N/A' && typeof epd === 'string') {
           // Remove "I" prefix if present (inferred value)
           const cleanedEPD = epd.replace(/^I\s*/i, '').trim();
-          const epdNum = parseFloat(cleanedEPD);
+          epdNum = parseFloat(cleanedEPD);
           if (!isNaN(epdNum)) {
             // Preserve sign (+ or -) and format to 2 decimals
             const sign = epdNum >= 0 ? '+' : '';
@@ -524,6 +609,8 @@ async function displayResults(results) {
         }
         const rank = traitData.percentRank || 'N/A';
         cell.textContent = `${epd} (${rank}%)`;
+        // Store raw EPD value for sorting
+        cell.dataset.sortValue = epdNum !== null && !isNaN(epdNum) ? epdNum.toString() : '';
         
         // Determine animal type and get appropriate percentile data
         const sex = (result.data.sex || '').toUpperCase();
@@ -550,6 +637,8 @@ async function displayResults(results) {
         cell.setAttribute('bgcolor', bgColorHex);
       } else {
         cell.textContent = 'N/A';
+        // Store empty sort value for N/A
+        cell.dataset.sortValue = '';
         // Use white background for traits not in the list
         const isInList = traitOrder.includes(trait);
         const bgColor = isInList ? '#808080' : '#FFFFFF';
@@ -569,7 +658,259 @@ async function displayResults(results) {
   });
   table.appendChild(tbody);
 
-  mainResultsContainer.appendChild(table);
+  // Define helper function for toggling column visibility
+  function toggleColumnVisibility(table, columnName, isVisible) {
+    // Hide/show header using data attribute
+    const headerCells = table.querySelectorAll('th');
+    headerCells.forEach(th => {
+      if (th.dataset.columnName === columnName) {
+        th.style.display = isVisible ? '' : 'none';
+      }
+    });
+    
+    // Hide/show cells in body using data attribute
+    const bodyRows = table.querySelectorAll('tbody tr');
+    bodyRows.forEach(row => {
+      const cells = row.querySelectorAll('td');
+      cells.forEach(cell => {
+        if (cell.dataset.columnName === columnName) {
+          cell.style.display = isVisible ? '' : 'none';
+        }
+      });
+    });
+  }
+
+  // Add table controls (sorting and column visibility)
+  const tableControls = document.createElement('div');
+  tableControls.className = 'table-controls';
+  tableControls.style.marginBottom = '15px';
+  tableControls.style.display = 'flex';
+  tableControls.style.gap = '15px';
+  tableControls.style.flexWrap = 'wrap';
+  tableControls.style.alignItems = 'center';
+
+  // Column visibility dropdown
+  const columnVisibilityContainer = document.createElement('div');
+  columnVisibilityContainer.style.display = 'flex';
+  columnVisibilityContainer.style.alignItems = 'center';
+  columnVisibilityContainer.style.gap = '8px';
+  
+  const columnVisibilityLabel = document.createElement('label');
+  columnVisibilityLabel.textContent = 'Show/Hide Columns:';
+  columnVisibilityLabel.style.fontWeight = '600';
+  columnVisibilityLabel.style.marginRight = '5px';
+  
+  const columnVisibilityBtn = document.createElement('button');
+  columnVisibilityBtn.textContent = 'Columns';
+  columnVisibilityBtn.className = 'btn btn-secondary';
+  columnVisibilityBtn.style.padding = '8px 16px';
+  columnVisibilityBtn.style.fontSize = '14px';
+  columnVisibilityBtn.style.cursor = 'pointer';
+  
+  const columnVisibilityMenu = document.createElement('div');
+  columnVisibilityMenu.className = 'column-visibility-menu';
+  columnVisibilityMenu.style.display = 'none';
+  columnVisibilityMenu.style.position = 'absolute';
+  columnVisibilityMenu.style.backgroundColor = 'white';
+  columnVisibilityMenu.style.border = '2px solid #ddd';
+  columnVisibilityMenu.style.borderRadius = '6px';
+  columnVisibilityMenu.style.padding = '10px';
+  columnVisibilityMenu.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+  columnVisibilityMenu.style.zIndex = '1000';
+  columnVisibilityMenu.style.maxHeight = '400px';
+  columnVisibilityMenu.style.overflowY = 'auto';
+  columnVisibilityMenu.style.minWidth = '200px';
+  
+  headers.forEach(header => {
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.style.display = 'flex';
+    checkboxContainer.style.alignItems = 'center';
+    checkboxContainer.style.marginBottom = '5px';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `col-vis-${header}`;
+    checkbox.checked = columnMetadata[header].visible;
+    checkbox.dataset.columnName = header;
+    
+    const label = document.createElement('label');
+    label.htmlFor = `col-vis-${header}`;
+    label.textContent = header;
+    label.style.marginLeft = '8px';
+    label.style.cursor = 'pointer';
+    label.style.flex = '1';
+    
+    checkbox.addEventListener('change', () => {
+      columnMetadata[header].visible = checkbox.checked;
+      toggleColumnVisibility(table, header, checkbox.checked);
+      
+      // Save preferences to localStorage
+      const preferences = {};
+      headers.forEach(h => {
+        preferences[h] = columnMetadata[h].visible;
+      });
+      saveColumnVisibilityPreferences(preferences);
+    });
+    
+    checkboxContainer.appendChild(checkbox);
+    checkboxContainer.appendChild(label);
+    columnVisibilityMenu.appendChild(checkboxContainer);
+  });
+  
+  columnVisibilityBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isVisible = columnVisibilityMenu.style.display !== 'none';
+    columnVisibilityMenu.style.display = isVisible ? 'none' : 'block';
+    
+    if (!isVisible) {
+      // Position menu relative to button
+      const rect = columnVisibilityBtn.getBoundingClientRect();
+      columnVisibilityMenu.style.position = 'fixed';
+      columnVisibilityMenu.style.top = (rect.bottom + 5) + 'px';
+      columnVisibilityMenu.style.left = rect.left + 'px';
+    }
+  });
+  
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!columnVisibilityMenu.contains(e.target) && e.target !== columnVisibilityBtn) {
+      columnVisibilityMenu.style.display = 'none';
+    }
+  });
+  
+  columnVisibilityContainer.appendChild(columnVisibilityLabel);
+  columnVisibilityContainer.appendChild(columnVisibilityBtn);
+  columnVisibilityContainer.style.position = 'relative';
+  columnVisibilityContainer.appendChild(columnVisibilityMenu);
+  
+  tableControls.appendChild(columnVisibilityContainer);
+  
+  // Add sort info
+  const sortInfo = document.createElement('div');
+  sortInfo.className = 'sort-info';
+  sortInfo.textContent = 'Click column headers to sort';
+  sortInfo.style.fontSize = '13px';
+  sortInfo.style.color = '#666';
+  sortInfo.style.fontStyle = 'italic';
+  tableControls.appendChild(sortInfo);
+
+  // Apply saved column visibility preferences to the table
+  headers.forEach(header => {
+    if (!columnMetadata[header].visible) {
+      toggleColumnVisibility(table, header, false);
+    }
+  });
+
+  // Create wrapper for table with controls
+  const tableWrapper = document.createElement('div');
+  tableWrapper.className = 'table-wrapper';
+  tableWrapper.appendChild(tableControls);
+  tableWrapper.appendChild(table);
+
+  mainResultsContainer.appendChild(tableWrapper);
+  
+  // Add sorting functionality
+  let currentSort = { column: null, direction: 'asc' };
+  
+  function sortTable(columnName, direction) {
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const isTraitColumn = sortedTraits.includes(columnName);
+    
+    rows.sort((a, b) => {
+      // Find cells by data-column-name attribute
+      const aCell = Array.from(a.querySelectorAll('td')).find(cell => cell.dataset.columnName === columnName);
+      const bCell = Array.from(b.querySelectorAll('td')).find(cell => cell.dataset.columnName === columnName);
+      
+      if (!aCell || !bCell) return 0;
+      
+      let comparison = 0;
+      
+      if (isTraitColumn) {
+        // For trait columns, sort by the stored EPD value (data-sort-value)
+        const aSortValue = aCell.dataset.sortValue || '';
+        const bSortValue = bCell.dataset.sortValue || '';
+        
+        // If either is empty/N/A, treat as null/undefined for sorting
+        if (aSortValue === '' && bSortValue === '') {
+          comparison = 0;
+        } else if (aSortValue === '') {
+          comparison = 1; // N/A values go to the end
+        } else if (bSortValue === '') {
+          comparison = -1; // N/A values go to the end
+        } else {
+          const aNum = parseFloat(aSortValue);
+          const bNum = parseFloat(bSortValue);
+          if (!isNaN(aNum) && !isNaN(bNum)) {
+            comparison = aNum - bNum;
+          } else {
+            // Fallback to text comparison if parsing fails
+            comparison = aCell.textContent.trim().localeCompare(bCell.textContent.trim());
+          }
+        }
+      } else {
+        // For non-trait columns, try to use stored sort value first, then fallback to text
+        const aSortValue = aCell.dataset.sortValue || '';
+        const bSortValue = bCell.dataset.sortValue || '';
+        
+        if (aSortValue !== '' && bSortValue !== '') {
+          const aNum = parseFloat(aSortValue);
+          const bNum = parseFloat(bSortValue);
+          if (!isNaN(aNum) && !isNaN(bNum)) {
+            comparison = aNum - bNum;
+          } else {
+            comparison = aCell.textContent.trim().localeCompare(bCell.textContent.trim());
+          }
+        } else {
+          // Fallback to text comparison
+          const aText = aCell.textContent.trim();
+          const bText = bCell.textContent.trim();
+          comparison = aText.localeCompare(bText);
+        }
+      }
+      
+      return direction === 'asc' ? comparison : -comparison;
+    });
+    
+    // Remove all rows and re-append in sorted order
+    rows.forEach(row => {
+      tbody.removeChild(row);
+    });
+    
+    rows.forEach((row, index) => {
+      // Update sticky name column background for zebra striping
+      const nameCell = row.querySelector('.sticky-name-column');
+      if (nameCell) {
+        nameCell.style.backgroundColor = index % 2 === 0 ? '#FFFFFF' : '#f9f9f9';
+      }
+      tbody.appendChild(row);
+    });
+    
+    // Update sort indicators (preserve original column name)
+    table.querySelectorAll('th').forEach(th => {
+      const originalName = th.dataset.columnName;
+      if (originalName === columnName) {
+        th.textContent = originalName + (direction === 'asc' ? ' ↑' : ' ↓');
+      } else {
+        // Remove sort indicator from other columns
+        th.textContent = originalName;
+      }
+    });
+  }
+  
+  // Add click handlers for sortable headers
+  table.querySelectorAll('.sortable-header').forEach(th => {
+    th.addEventListener('click', () => {
+      const columnName = th.dataset.columnName;
+      if (currentSort.column === columnName) {
+        // Toggle direction
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.column = columnName;
+        currentSort.direction = 'asc';
+      }
+      sortTable(columnName, currentSort.direction);
+    });
+  });
 
   // Show errors if any
   const errorResults = results.filter(r => !r.success);
