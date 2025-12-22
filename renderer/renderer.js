@@ -1316,13 +1316,34 @@ if (checkUpdatesBtn) {
   });
 }
 
+// Helper function to strip HTML tags from text
+function stripHtmlTags(html) {
+  if (!html) return '';
+  // Create a temporary div element
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  // Get text content (which automatically strips HTML tags)
+  const text = tmp.textContent || tmp.innerText || '';
+  // Clean up extra whitespace
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 // Update available handler
 window.electronAPI.onUpdateAvailable((data) => {
   console.log('Update available:', data);
   updateNotificationTitle.textContent = `Update Available: v${data.version}`;
-  updateNotificationMessage.textContent = data.releaseNotes 
-    ? `Release notes: ${data.releaseNotes.substring(0, 100)}${data.releaseNotes.length > 100 ? '...' : ''}`
-    : `A new version (${data.version}) is available.`;
+  
+  let releaseNotesText = '';
+  if (data.releaseNotes) {
+    // Strip HTML tags from release notes
+    const cleanNotes = stripHtmlTags(data.releaseNotes);
+    releaseNotesText = cleanNotes.length > 150 
+      ? `Release notes: ${cleanNotes.substring(0, 150)}...`
+      : `Release notes: ${cleanNotes}`;
+  }
+  
+  updateNotificationMessage.textContent = releaseNotesText 
+    || `A new version (${data.version}) is available.`;
   updateDownloadBtn.style.display = 'inline-block';
   updateInstallBtn.style.display = 'none';
   updateProgressBar.style.display = 'none';
