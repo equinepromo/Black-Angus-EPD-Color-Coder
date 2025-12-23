@@ -150,29 +150,35 @@ baseScore += traitContribution
 - BW (emphasis 1, gets Gray 0): `weight = 1.0875`, `contribution = 0 × 1.0875 = 0.0`
 - $M (emphasis 8, max, gets Dark Green +3): `weight = 1.7`, `contribution = 3 × 1.7 = 5.1`
 
-## Step 6: Penalties for Below-Gray Traits
+## Step 6: Penalties for Below-Light-Green Traits
 
-### A. Below-Gray Penalty
+### A. Below-Light-Green Penalty
 
-For any trait that is **worse than Gray** (Pink, Red, or Dark Red):
+For any trait that is **worse than Light Green** (Gray, Pink, Red, or Dark Red):
 
 ```
-rankDiff = colorRank - grayRank
-belowGrayPenalty += rankDiff × 0.25 × weight
+rankDiff = colorRank - lightGreenRank
+belowLightGreenPenalty += rankDiff × 0.25 × weight
 ```
 
 **What does 0.25 represent?**
 
-The `0.25` is a **scaling factor** (penalty multiplier) that determines how many points are deducted per rank worse than Gray. It converts the rank difference into a score penalty:
+The `0.25` is a **scaling factor** (penalty multiplier) that determines how many points are deducted per rank worse than Light Green. It converts the rank difference into a score penalty:
 
-- For each rank worse than Gray, you lose **0.25 points** (multiplied by the trait weight)
+- For each rank worse than Light Green, you lose **0.25 points** (multiplied by the trait weight)
 - This is a tuning parameter that balances the scoring - moderate enough to not dominate, but meaningful enough to penalize poor traits
-- The penalty scales linearly: Pink = 0.25×weight, Red = 0.50×weight, Dark Red = 0.75×weight
+- The penalty scales linearly: Gray = 0.25×weight, Pink = 0.50×weight, Red = 0.75×weight, Dark Red = 1.00×weight
 
 **Example:** If WW (emphasis 6, weight 1.525) is Red (rank 5):
 ```
-rankDiff = 5 - 3 = 2
-penalty = 2 × 0.25 × 1.525 = 0.7625 points deducted
+rankDiff = 5 - 2 = 3
+penalty = 3 × 0.25 × 1.525 = 1.14375 points deducted
+```
+
+**Example:** If WW is Gray (rank 3):
+```
+rankDiff = 3 - 2 = 1
+penalty = 1 × 0.25 × 1.525 = 0.38125 points deducted
 ```
 
 ## Step 7: Configurable Gates
@@ -188,25 +194,42 @@ An empty array means NO gates are active.
 
 ### B. Extra Gate Penalty
 
-If a trait is a gate trait AND worse than Gray:
+If a trait is a gate trait AND worse than Gray (Pink, Red, or Dark Red):
 
 ```
+rankDiff = colorRank - grayRank
 extraGatePenalty += rankDiff × 0.60 × weight
 ```
 
+**Important**: This penalty only applies to gate traits that are **worse than Gray**. Gray traits pass the gate but still receive the below-light-green penalty in scoring.
+
 **What does 0.60 represent?**
 
-The `0.60` is a **stricter penalty multiplier** for gate traits. It's **2.4× higher** than the below-gray penalty (0.60 vs 0.25), making gate trait failures significantly more costly than non-gate trait failures. This emphasizes the importance of gate traits meeting the minimum threshold (Gray or better).
+The `0.60` is a **stricter penalty multiplier** for gate traits. It's **2.4× higher** than the below-light-green penalty (0.60 vs 0.25), making gate trait failures significantly more costly than non-gate trait failures. This emphasizes the importance of gate traits meeting the minimum threshold (Gray or better for gates).
 
-**Example:** Same WW that is Red and is a gate trait:
-```
-penalty = 2 × 0.60 × 1.525 = 1.83 points deducted
-```
+**Important**: Gate traits that are Gray or better will **pass the gate** (see Gate Pass/Fail Rule below), but Gray traits still receive the below-light-green penalty in scoring. The extra gate penalty only applies to traits worse than Gray (Pink, Red, Dark Red).
 
-This extra penalty is **in addition** to the below-gray penalty, so a gate trait that fails:
-- Loses points from the below-gray penalty (0.25 per rank)
-- **Plus** loses additional points from the gate penalty (0.60 per rank)
-- **Total gate penalty = 0.85 per rank** (0.25 + 0.60) for gate traits
+**Example:** If WW is Red and is a gate trait:
+- Red fails the gate (not acceptable)
+- Gets below-light-green penalty: `rankDiff = 5 - 2 = 3`, `penalty = 3 × 0.25 × 1.525 = 1.14375`
+- Plus extra gate penalty: `rankDiff = 5 - 3 = 2`, `penalty = 2 × 0.60 × 1.525 = 1.83`
+- **Total penalty = 2.97375** (1.14375 + 1.83)
+
+**Example:** If WW is Gray and is a gate trait:
+- Gray passes the gate (acceptable)
+- But still gets below-light-green penalty: `rankDiff = 3 - 2 = 1`, `penalty = 1 × 0.25 × 1.525 = 0.38125`
+- No extra gate penalty (because Gray is acceptable for gates)
+
+**Example:** If WW is Pink and is a gate trait:
+- Pink fails the gate (not acceptable)
+- Gets below-light-green penalty: `rankDiff = 4 - 2 = 2`, `penalty = 2 × 0.25 × 1.525 = 0.7625`
+- Plus extra gate penalty: `rankDiff = 4 - 3 = 1`, `penalty = 1 × 0.60 × 1.525 = 0.915`
+- **Total penalty = 1.6775** (0.7625 + 0.915)
+
+This extra penalty is **in addition** to the below-light-green penalty, so a gate trait that fails (Pink, Red, or Dark Red):
+- Loses points from the below-light-green penalty (0.25 per rank from Light Green)
+- **Plus** loses additional points from the gate penalty (0.60 per rank from Gray)
+- **Total gate penalty** varies based on how far below Gray the trait is
 
 ### C. Gate Pass / Fail Rule
 
@@ -219,7 +242,7 @@ Gate status affects sorting priority, not score calculation.
 ## Step 8: Final Score
 
 ```
-finalScore = baseScore - belowGrayPenalty - extraGatePenalty
+finalScore = baseScore - belowLightGreenPenalty - extraGatePenalty
 ```
 
 ## Step 9: Sorting / Ranking
@@ -228,7 +251,7 @@ Matings are ranked by:
 
 1. **Gate pass status** (gate passers first)
 2. **Final score** (higher scores first)
-3. **Number of below-gray traits** (fewer bad traits first)
+3. **Number of below-light-green traits** (fewer bad traits first)
 4. **Number of improved emphasis traits** (more improved emphasis traits first)
 5. **Alphabetical** by cow name, then sire name
 
@@ -245,12 +268,18 @@ Let's say we have a mating with these traits:
 
 **Calculations:**
 - **Base Score**: `1.525 + 2.70 - 1.35 + 0.0 = 2.875`
-- **Below Gray Penalty**: CLAW is Pink (rank 4, one rank worse than Gray)
-  - `rankDiff = 4 - 3 = 1`
-  - `penalty = 1 × 0.25 × 1.35 = 0.3375` (0.25 points per rank × weight)
+- **Below Light Green Penalty**: 
+  - CLAW is Pink (rank 4, two ranks worse than Light Green)
+    - `rankDiff = 4 - 2 = 2`
+    - `penalty = 2 × 0.25 × 1.35 = 0.675` (0.25 points per rank × weight)
+  - BW is Gray (rank 3, one rank worse than Light Green)
+    - `rankDiff = 3 - 2 = 1`
+    - `penalty = 1 × 0.25 × 1.0875 = 0.271875` (0.25 points per rank × weight)
+  - **Total Below Light Green Penalty**: `0.675 + 0.271875 = 0.946875`
 - **Extra Gate Penalty**: CLAW is a gate trait and is Pink
-  - `penalty = 1 × 0.60 × 1.35 = 0.81` (0.60 points per rank × weight, in addition to below-gray penalty)
-- **Final Score**: `2.875 - 0.3375 - 0.81 = 1.7275`
+  - `rankDiff = 4 - 2 = 2`
+  - `penalty = 2 × 0.60 × 1.35 = 1.62` (0.60 points per rank × weight, in addition to below-light-green penalty)
+- **Final Score**: `2.875 - 0.946875 - 1.62 = 0.308125`
 
 ## Summary
 
@@ -258,9 +287,9 @@ The scoring algorithm:
 - **Uses emphasis-based weighting** - All traits contribute, with relative importance based on emphasis values
 - **Normalizes weights safely** - Prevents over-weighting of high-emphasis traits (range: 1.0 to 1.7)
 - **Rewards good traits** - Especially high-emphasis traits with higher weights
-- **Penalizes bad traits** - Worse than Gray gets penalties
+- **Penalizes below-light-green traits** - Gray, Pink, Red, and Dark Red all get penalties (Light Green is the baseline)
 - **Extra penalizes gate trait failures** - 0.60 multiplier vs 0.25 for non-gates
 - **Prioritizes matings that pass the gate** - If gates are configured
 - **Rewards uniform green animals** - Balanced animals score best
 
-This ensures that matings with better overall traits (especially high-emphasis traits) rank higher, while those with gate failures or many poor traits are ranked lower.
+This ensures that matings with better overall traits (especially high-emphasis traits) rank higher, while those with gate failures or many below-light-green traits are ranked lower.

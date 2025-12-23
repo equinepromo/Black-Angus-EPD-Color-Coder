@@ -137,3 +137,4 @@ codesign -dv --verbose=4 "/Applications/Black Angus EPD Color Coder.app"
 # Check Gatekeeper status
 spctl --status
 ```
+

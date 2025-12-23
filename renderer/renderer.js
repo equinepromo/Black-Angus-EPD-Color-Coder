@@ -1193,6 +1193,7 @@ async function displayMatingResults(data, fromAllMatings = false) {
     <h3>Mating Calculation Results</h3>
     <p><strong>Sire:</strong> ${data.sire.registrationNumber} - ${data.sire.animalName || 'N/A'}</p>
     <p><strong>Dam:</strong> ${data.dam.registrationNumber} - ${data.dam.animalName || 'N/A'}</p>
+    <div id="mating-improvement-counts" style="margin-top: 10px;"></div>
   `;
   matingSection.appendChild(header);
   
@@ -1261,6 +1262,79 @@ async function displayMatingResults(data, fromAllMatings = false) {
     return;
   }
 
+  // Calculate improved/worsened counts by comparing calf EPD to dam EPD
+  let improvedCount = 0;
+  let worsenedCount = 0;
+  const traitComparison = {}; // Store comparison result for each trait for highlighting
+
+  sortedTraits.forEach(trait => {
+    const calcData = data.calculatedEPDs[trait];
+    if (!calcData) return;
+
+    // Get calf EPD (expected EPD) - prefer raw numeric value if available
+    let calfEpd = null;
+    if (calcData.epd !== undefined && calcData.epd !== 'N/A') {
+      if (typeof calcData.epd === 'number') {
+        calfEpd = calcData.epd;
+      } else {
+        const calfEpdStr = String(calcData.epd).replace(/^\+/, '').replace(/^I\s*/i, '').trim();
+        calfEpd = parseFloat(calfEpdStr);
+      }
+    }
+    
+    // Get dam EPD - prefer raw value from epdValues, otherwise parse from calcData
+    let damEpd = null;
+    const damEPDData = data.dam.epdValues?.[trait];
+    if (damEPDData?.epd !== undefined) {
+      if (typeof damEPDData.epd === 'number') {
+        damEpd = damEPDData.epd;
+      } else {
+        const damEpdStr = String(damEPDData.epd).replace(/^\+/, '').replace(/^I\s*/i, '').trim();
+        damEpd = parseFloat(damEpdStr);
+      }
+    } else if (calcData.damEPD && calcData.damEPD !== 'N/A') {
+      const damEpdStr = String(calcData.damEPD).replace(/^\+/, '').replace(/^I\s*/i, '').trim();
+      damEpd = parseFloat(damEpdStr);
+    }
+
+    if (isNaN(calfEpd) || isNaN(damEpd) || calfEpd === null || damEpd === null) {
+      traitComparison[trait] = 'neutral';
+      return;
+    }
+
+    // Determine if higher or lower is better for this trait
+    const isHigherBetter = traitDirection[trait] !== false; // Default to true if not specified
+    
+    // Compare values
+    if (Math.abs(calfEpd - damEpd) > 0.001) { // Use small epsilon for floating point comparison
+      const isImproved = isHigherBetter ? (calfEpd > damEpd) : (calfEpd < damEpd);
+      const isWorsened = isHigherBetter ? (calfEpd < damEpd) : (calfEpd > damEpd);
+      
+      if (isImproved) {
+        improvedCount++;
+        traitComparison[trait] = 'improved';
+      } else if (isWorsened) {
+        worsenedCount++;
+        traitComparison[trait] = 'worsened';
+      }
+    } else {
+      traitComparison[trait] = 'neutral';
+    }
+  });
+
+  // Update header to include improved/worsened counts
+  const countsContainer = document.getElementById('mating-improvement-counts');
+  if (countsContainer) {
+    countsContainer.innerHTML = `
+      <span style="background-color: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; margin-right: 10px; font-weight: bold;">
+        Improved: ${improvedCount}
+      </span>
+      <span style="background-color: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-weight: bold;">
+        Worsened: ${worsenedCount}
+      </span>
+    `;
+  }
+
   // Create table
   const table = document.createElement('table');
   table.className = 'epd-table';
@@ -1294,13 +1368,27 @@ async function displayMatingResults(data, fromAllMatings = false) {
     const row = document.createElement('tr');
     const calcData = data.calculatedEPDs[trait];
 
-    // Trait name
+    // Trait name - color code based on improvement/worsening
     const traitCell = document.createElement('td');
     traitCell.textContent = trait;
     traitCell.style.padding = '8px';
     traitCell.style.border = '1px solid #000';
     traitCell.style.textAlign = 'center';
     traitCell.style.fontWeight = 'bold';
+    
+    // Apply color based on comparison result
+    const comparison = traitComparison[trait] || 'neutral';
+    if (comparison === 'improved') {
+      traitCell.style.backgroundColor = '#d4edda'; // Light green
+      traitCell.style.color = '#155724'; // Dark green text
+    } else if (comparison === 'worsened') {
+      traitCell.style.backgroundColor = '#f8d7da'; // Light red
+      traitCell.style.color = '#721c24'; // Dark red text
+    } else {
+      traitCell.style.backgroundColor = '#FFFFFF'; // White/neutral
+      traitCell.style.color = '#000000'; // Black text
+    }
+    
     row.appendChild(traitCell);
 
     // Sire EPD (format to 2 decimal places and color code)
@@ -1487,9 +1575,9 @@ function displayAllMatingsResults(data) {
       if (Math.abs(a.score - b.score) > 0.001) {
         return b.score - a.score;
       }
-      // Then by fewer below gray traits
-      if (a.numBelowGrayAllTraits !== b.numBelowGrayAllTraits) {
-        return a.numBelowGrayAllTraits - b.numBelowGrayAllTraits;
+      // Then by fewer below light green traits
+      if (a.numBelowLightGreenAllTraits !== b.numBelowLightGreenAllTraits) {
+        return a.numBelowLightGreenAllTraits - b.numBelowLightGreenAllTraits;
       }
       // Finally by more improved emphasis traits
       return b.improvedEmphasisTraitsCount - a.improvedEmphasisTraitsCount;

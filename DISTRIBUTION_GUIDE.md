@@ -184,3 +184,4 @@ xattr -d com.apple.quarantine ~/Downloads/Black-Angus-EPD-Color-Coder-1.0.1.dmg
 - Ensure YAML files (`latest-mac.yml`, `latest.yml`) are uploaded to the release
 - Check that the release tag matches the version in `package.json`
 - Verify the repository name in `package.json` matches your GitHub repo
+

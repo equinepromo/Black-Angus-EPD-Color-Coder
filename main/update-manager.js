@@ -348,3 +348,4 @@ module.exports = {
   getCurrentVersion,
   cleanup
 };
+

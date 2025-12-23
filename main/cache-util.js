@@ -538,24 +538,60 @@ function getAnimalsByCategory(category) {
 }
 
 /**
+ * Get categories config file path (writable location)
+ * Uses userData path for packaged apps, falls back to relative path for dev
+ * @returns {string} Path to categories.json file
+ */
+function getCategoriesPath() {
+  try {
+    // Use userData path - works in both dev and packaged apps
+    const userDataPath = app.getPath('userData');
+    return path.join(userDataPath, 'categories.json');
+  } catch (error) {
+    console.error('[CACHE] Error getting userData path, using fallback:', error);
+    // Fallback to relative path if app.getPath fails (dev mode)
+    return path.join(__dirname, '../config/categories.json');
+  }
+}
+
+/**
  * Load categories from config file
  * @returns {Array} Array of category names
  */
 function loadCategories() {
   try {
-    const categoriesPath = path.join(__dirname, '../config/categories.json');
+    const categoriesPath = getCategoriesPath();
     
-    if (!fs.existsSync(categoriesPath)) {
-      // Initialize with default categories - only "My Herd" is predefined
-      const defaultCategories = ['My Herd'];
-      saveCategories(defaultCategories);
-      return defaultCategories;
+    // First, try to load from userData (packaged app location)
+    if (fs.existsSync(categoriesPath)) {
+      const categoriesData = fs.readFileSync(categoriesPath, 'utf8');
+      const parsed = JSON.parse(categoriesData);
+      if (parsed.categories && Array.isArray(parsed.categories)) {
+        return parsed.categories;
+      }
     }
     
-    const categoriesData = fs.readFileSync(categoriesPath, 'utf8');
-    const parsed = JSON.parse(categoriesData);
-    // Return categories from file, or just "My Herd" if file is empty/invalid
-    return parsed.categories || ['My Herd'];
+    // Fallback: try to load from config directory (dev mode or migration)
+    const legacyPath = path.join(__dirname, '../config/categories.json');
+    if (fs.existsSync(legacyPath)) {
+      try {
+        const categoriesData = fs.readFileSync(legacyPath, 'utf8');
+        const parsed = JSON.parse(categoriesData);
+        if (parsed.categories && Array.isArray(parsed.categories)) {
+          // Migrate to userData location
+          saveCategories(parsed.categories);
+          console.log('[CACHE] Migrated categories.json to userData location');
+          return parsed.categories;
+        }
+      } catch (migrationError) {
+        console.error('[CACHE] Error migrating categories file:', migrationError);
+      }
+    }
+    
+    // Initialize with default categories if file doesn't exist
+    const defaultCategories = ['My Herd'];
+    saveCategories(defaultCategories);
+    return defaultCategories;
   } catch (error) {
     console.error('[CACHE] Error loading categories:', error);
     // Return default categories on error - only "My Herd" is predefined
@@ -570,10 +606,10 @@ function loadCategories() {
  */
 function saveCategories(categories) {
   try {
-    const categoriesPath = path.join(__dirname, '../config/categories.json');
+    const categoriesPath = getCategoriesPath();
     const categoriesDir = path.dirname(categoriesPath);
     
-    // Ensure config directory exists
+    // Ensure directory exists
     if (!fs.existsSync(categoriesDir)) {
       fs.mkdirSync(categoriesDir, { recursive: true });
     }

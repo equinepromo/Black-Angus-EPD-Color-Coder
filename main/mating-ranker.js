@@ -158,7 +158,16 @@ function getColorGoodness(band) {
 }
 
 /**
- * Checks if band is worse than gray
+ * Checks if band is worse than light green (baseline for penalties)
+ * @param {string} band - Band name
+ * @returns {boolean} True if worse than light green (Gray, Pink, Red, or Dark Red)
+ */
+function isWorseThanLightGreen(band) {
+  return getColorRank(band) > getColorRank(BANDS.LIGHT_GREEN);
+}
+
+/**
+ * Checks if band is worse than gray (for backward compatibility/legacy checks)
  * @param {string} band - Band name
  * @returns {boolean} True if worse than gray
  */
@@ -237,9 +246,9 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
   
   const traitResults = {};
   let baseScore = 0;
-  let belowGrayPenalty = 0;
+  let belowLightGreenPenalty = 0;
   let extraGatePenalty = 0;
-  let numBelowGrayAllTraits = 0;
+  let numBelowLightGreenAllTraits = 0;
   let improvedEmphasisTraitsCount = 0;
   let improvedTraitsCount = 0; // Traits improved from cow EPD
   let worsenedTraitsCount = 0; // Traits worsened from cow EPD
@@ -298,26 +307,29 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
     // Add to base score (all traits contribute)
     baseScore += weight * goodness;
     
-    // Check if worse than gray
-    if (isWorseThanGray(band)) {
-      numBelowGrayAllTraits++;
+    // Check if worse than light green (baseline for penalties)
+    if (isWorseThanLightGreen(band)) {
+      numBelowLightGreenAllTraits++;
       const colorRank = getColorRank(band);
-      const grayRank = getColorRank(BANDS.GRAY);
-      const rankDiff = colorRank - grayRank;
+      const lightGreenRank = getColorRank(BANDS.LIGHT_GREEN);
+      const rankDiff = colorRank - lightGreenRank;
       
-      // Below gray penalty (applied to all traits worse than Gray)
-      belowGrayPenalty += rankDiff * 0.25 * weight;
+      // Below light green penalty (applied to all traits worse than Light Green: Gray, Pink, Red, Dark Red)
+      belowLightGreenPenalty += rankDiff * 0.25 * weight;
       
-      // Extra gate penalty if this is a gate trait
-      if (gateTraits.length > 0 && gateTraits.includes(trait)) {
-        extraGatePenalty += rankDiff * 0.60 * weight;
+      // Extra gate penalty if this is a gate trait AND worse than Gray (Pink, Red, Dark Red)
+      // Note: Gray passes gates but still gets the below-light-green penalty above
+      if (gateTraits.length > 0 && gateTraits.includes(trait) && isWorseThanGray(band)) {
+        const grayRank = getColorRank(BANDS.GRAY);
+        const gateRankDiff = colorRank - grayRank;
+        extraGatePenalty += gateRankDiff * 0.60 * weight;
         failedGateTraits.push(trait);
       }
     }
     
-    // Check if emphasis trait is improved (at or better than gray)
+    // Check if emphasis trait is improved (at or better than light green)
     const emphasis = emphasisByTrait[trait] ?? 0;
-    if (emphasis > 0 && !isWorseThanGray(band)) {
+    if (emphasis > 0 && !isWorseThanLightGreen(band)) {
       improvedEmphasisTraitsCount++;
     }
     
@@ -335,9 +347,10 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
   }
   
   // Calculate final score
-  const finalScore = baseScore - belowGrayPenalty - extraGatePenalty;
+  const finalScore = baseScore - belowLightGreenPenalty - extraGatePenalty;
   
   // Check gate (all gate traits must be <= GRAY, or no gates if empty)
+  // Note: Gray is acceptable for gates, but still receives penalty in scoring
   const passedGate = gateTraits.length === 0 || gateTraits.every(trait => {
     const result = traitResults[trait];
     if (!result) return false; // Missing data fails gate
@@ -352,7 +365,7 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
     passedGate: passedGate,
     failedGateTraits: failedGateTraits,
     score: finalScore,
-    numBelowGrayAllTraits: numBelowGrayAllTraits,
+    numBelowLightGreenAllTraits: numBelowLightGreenAllTraits,
     improvedEmphasisTraitsCount: improvedEmphasisTraitsCount,
     improvedTraitsCount: improvedTraitsCount,
     worsenedTraitsCount: worsenedTraitsCount,
@@ -419,9 +432,9 @@ function rankAllMatings(cows, sires, percentileData, colorCriteria, config, prog
       return b.score - a.score;
     }
     
-    // 3. numBelowGrayAllTraits (asc) - fewer bad traits first
-    if (a.numBelowGrayAllTraits !== b.numBelowGrayAllTraits) {
-      return a.numBelowGrayAllTraits - b.numBelowGrayAllTraits;
+    // 3. numBelowLightGreenAllTraits (asc) - fewer bad traits first
+    if (a.numBelowLightGreenAllTraits !== b.numBelowLightGreenAllTraits) {
+      return a.numBelowLightGreenAllTraits - b.numBelowLightGreenAllTraits;
     }
     
     // 4. improvedEmphasisTraitsCount (desc) - more improved emphasis traits first
@@ -466,9 +479,9 @@ function rankAllMatings(cows, sires, percentileData, colorCriteria, config, prog
     if (Math.abs(a.score - b.score) > 0.001) {
       return b.score - a.score;
     }
-    // 3. numBelowGrayAllTraits (asc)
-    if (a.numBelowGrayAllTraits !== b.numBelowGrayAllTraits) {
-      return a.numBelowGrayAllTraits - b.numBelowGrayAllTraits;
+    // 3. numBelowLightGreenAllTraits (asc)
+    if (a.numBelowLightGreenAllTraits !== b.numBelowLightGreenAllTraits) {
+      return a.numBelowLightGreenAllTraits - b.numBelowLightGreenAllTraits;
     }
     // 4. improvedEmphasisTraitsCount (desc)
     if (a.improvedEmphasisTraitsCount !== b.improvedEmphasisTraitsCount) {
@@ -489,7 +502,8 @@ module.exports = {
   bandFromBgColor,
   getColorRank,
   getColorGoodness,
-  isWorseThanGray,
+  isWorseThanLightGreen,
+  isWorseThanGray, // Kept for backward compatibility
   percentileFromEpd,
   colorFromPercentile,
   evaluateMating,

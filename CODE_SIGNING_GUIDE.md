@@ -239,3 +239,4 @@ Once signed and notarized:
 - [Apple Code Signing Guide](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/)
 - [electron-builder Code Signing](https://www.electron.build/code-signing)
 - [Notarization Documentation](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution)
+

@@ -335,3 +335,4 @@ https://github.com/equinepromo/Black-Angus-EPD-Color-Coder/releases/download/v1.
 - [electron-updater Documentation](https://www.electron.build/auto-update)
 - [Semantic Versioning](https://semver.org/)
 - [GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+
