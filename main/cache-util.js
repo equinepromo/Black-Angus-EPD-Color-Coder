@@ -152,6 +152,29 @@ function saveCache(key, data) {
 }
 
 /**
+ * Delete a single cached animal by registration number
+ * @param {string} registrationNumber - Registration number of the animal to delete
+ * @returns {Object} Result object with success status
+ */
+function deleteCachedAnimal(registrationNumber) {
+  try {
+    const cacheFilePath = getCacheFilePath(`epd_${registrationNumber}`);
+    
+    if (!fs.existsSync(cacheFilePath)) {
+      console.log(`[CACHE] Cache file does not exist for registration number: ${registrationNumber}`);
+      return { success: false, error: 'Cache file not found' };
+    }
+    
+    fs.unlinkSync(cacheFilePath);
+    console.log(`[CACHE] Deleted cache file for registration number: ${registrationNumber}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`[CACHE] Error deleting cache for registration number ${registrationNumber}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Clear all cache files
  */
 function clearAllCache() {
@@ -305,12 +328,63 @@ function getCachedAnimals() {
   }
 }
 
+/**
+ * Get list of all cached animals with full EPD data
+ * @returns {Array} Array of full animal data objects (with epdValues, etc.)
+ */
+function getCachedAnimalsWithData() {
+  try {
+    // Ensure cache directory is initialized
+    const cacheDir = ensureCacheDir();
+    
+    if (!fs.existsSync(cacheDir)) {
+      console.log('[CACHE] Cache directory does not exist:', cacheDir);
+      return [];
+    }
+
+    const files = fs.readdirSync(cacheDir);
+    const epdFiles = files.filter(f => f.startsWith('epd_') && f.endsWith('.json'));
+    const animals = [];
+
+    epdFiles.forEach(file => {
+      try {
+        const filePath = path.join(cacheDir, file);
+        
+        // Check if file is still valid (not expired)
+        if (!isCacheValid(filePath)) {
+          return; // Skip expired files
+        }
+
+        const cacheContent = fs.readFileSync(filePath, 'utf8');
+        const cached = JSON.parse(cacheContent);
+        
+        if (cached && cached.data) {
+          // Return full data object
+          animals.push(cached.data);
+        }
+      } catch (error) {
+        // Skip files we can't read or parse
+        console.error(`[CACHE] Error reading cached animal from ${file}:`, error.message);
+      }
+    });
+
+    console.log(`[CACHE] Found ${animals.length} cached animals with full data`);
+    return animals;
+  } catch (error) {
+    console.error('[CACHE] Error getting cached animals with data:', error);
+    console.error('[CACHE] Error stack:', error.stack);
+    return [];
+  }
+}
+
 module.exports = {
   loadCache,
   saveCache,
+  deleteCachedAnimal,
   clearAllCache,
   getCacheStats,
   getCachedAnimals,
+  getCachedAnimalsWithData,
   isCacheValid,
   initializeCacheDir,
   CACHE_EXPIRY_DAYS

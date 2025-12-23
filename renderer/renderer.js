@@ -233,6 +233,45 @@ if (damDropdown) {
   });
 }
 
+// Mating mode toggle
+const matingModeSingle = document.getElementById('mating-mode-single');
+const matingModeAll = document.getElementById('mating-mode-all');
+const singleMatingMode = document.getElementById('single-mating-mode');
+const allMatingsMode = document.getElementById('all-matings-mode');
+
+let currentMatingMode = 'single'; // 'single' or 'all'
+
+if (matingModeSingle && matingModeAll) {
+  matingModeSingle.addEventListener('click', () => {
+    currentMatingMode = 'single';
+    singleMatingMode.style.display = 'block';
+    allMatingsMode.style.display = 'none';
+    matingModeSingle.className = 'btn btn-primary';
+    matingModeAll.className = 'btn btn-secondary';
+    // Clear all matings results when switching modes
+    const allMatingsContainer = document.getElementById('all-matings-results-container');
+    if (allMatingsContainer) {
+      allMatingsContainer.innerHTML = '';
+    }
+    // Don't clear lastRankedResults - we need it for the back button
+    // lastRankedResults = null;
+  });
+  
+  matingModeAll.addEventListener('click', () => {
+    currentMatingMode = 'all';
+    singleMatingMode.style.display = 'none';
+    allMatingsMode.style.display = 'block';
+    matingModeSingle.className = 'btn btn-secondary';
+    matingModeAll.className = 'btn btn-primary';
+    // Clear single mating results when switching modes
+    // But preserve All Matings results if they exist
+    const allMatingsContainer = document.getElementById('all-matings-results-container');
+    if (!allMatingsContainer || allMatingsContainer.innerHTML === '') {
+      matingResultsContainer.innerHTML = '';
+    }
+  });
+}
+
 // Mating Calculator button
 calculateMatingBtn.addEventListener('click', async () => {
   const sireRegNum = sireInput.value.trim();
@@ -263,6 +302,53 @@ calculateMatingBtn.addEventListener('click', async () => {
     hideMatingProgress();
   }
 });
+
+// Rank All Matings button
+const rankAllMatingsBtn = document.getElementById('rank-all-matings-btn');
+const topNSelect = document.getElementById('top-n-select');
+const gateFilterCheckbox = document.getElementById('gate-filter-checkbox');
+
+// Store last ranked results for filtering
+let lastRankedResults = null;
+
+if (rankAllMatingsBtn) {
+  rankAllMatingsBtn.addEventListener('click', async () => {
+    rankAllMatingsBtn.disabled = true;
+    rankAllMatingsBtn.textContent = 'Ranking...';
+    showMatingProgress(0, 6, 'Starting...');
+
+    try {
+      const topN = parseInt(topNSelect.value, 10) || 5;
+      const config = {
+        topN: topN
+      };
+      
+      const result = await window.electronAPI.rankAllMatings(config);
+      
+      if (result.success) {
+        lastRankedResults = result.data;
+        displayAllMatingsResults(result.data);
+      } else {
+        alert('Error ranking matings: ' + result.error);
+      }
+    } catch (error) {
+      alert('Error during ranking: ' + error.message);
+    } finally {
+      rankAllMatingsBtn.disabled = false;
+      rankAllMatingsBtn.textContent = 'Rank All Matings';
+      hideMatingProgress();
+    }
+  });
+}
+
+// Gate filter checkbox - re-display results when toggled
+if (gateFilterCheckbox) {
+  gateFilterCheckbox.addEventListener('change', () => {
+    if (lastRankedResults) {
+      displayAllMatingsResults(lastRankedResults);
+    }
+  });
+}
 
 function showProgress(completed, total) {
   progressSection.style.display = 'block';
@@ -981,7 +1067,7 @@ async function displayResults(results) {
   }
 }
 
-async function displayMatingResults(data) {
+async function displayMatingResults(data, fromAllMatings = false) {
   // Clear existing results
   matingResultsContainer.innerHTML = '';
 
@@ -1004,12 +1090,69 @@ async function displayMatingResults(data) {
   // Header with sire and dam info
   const header = document.createElement('div');
   header.style.marginBottom = '20px';
+  
+  // Add back button if viewing from All Matings
+  let backButtonHtml = '';
+  if (fromAllMatings) {
+    backButtonHtml = `
+      <button id="back-to-all-matings-btn" class="btn btn-secondary" style="margin-bottom: 15px;">
+        ← Back to All Matings Ranking
+      </button>
+    `;
+  }
+  
   header.innerHTML = `
+    ${backButtonHtml}
     <h3>Mating Calculation Results</h3>
     <p><strong>Sire:</strong> ${data.sire.registrationNumber} - ${data.sire.animalName || 'N/A'}</p>
     <p><strong>Dam:</strong> ${data.dam.registrationNumber} - ${data.dam.animalName || 'N/A'}</p>
   `;
   matingSection.appendChild(header);
+  
+  // Add back button click handler
+  if (fromAllMatings) {
+    // Use setTimeout to ensure the button exists in the DOM
+    setTimeout(() => {
+      const backButton = document.getElementById('back-to-all-matings-btn');
+      if (backButton) {
+        // Remove any existing listeners to avoid duplicates
+        const newBackButton = backButton.cloneNode(true);
+        backButton.parentNode.replaceChild(newBackButton, backButton);
+        
+        newBackButton.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Switch back to All Matings mode first (without triggering clear)
+          if (matingModeAll) {
+            currentMatingMode = 'all';
+            singleMatingMode.style.display = 'none';
+            allMatingsMode.style.display = 'block';
+            matingModeSingle.className = 'btn btn-secondary';
+            matingModeAll.className = 'btn btn-primary';
+          }
+          
+          // Clear only the detailed view, not the all-matings container
+          const allMatingsContainer = document.getElementById('all-matings-results-container');
+          if (!allMatingsContainer) {
+            // If container doesn't exist, clear everything and restore
+            matingResultsContainer.innerHTML = '';
+          } else {
+            // Just clear the detailed view section
+            const matingResultsSection = document.getElementById('mating-results-section');
+            if (matingResultsSection) {
+              matingResultsSection.remove();
+            }
+          }
+          
+          // Restore the last ranked results
+          if (lastRankedResults) {
+            displayAllMatingsResults(lastRankedResults);
+          }
+        });
+      }
+    }, 100);
+  }
 
   // Get all traits from calculated EPDs and sort them
   const allTraits = Object.keys(data.calculatedEPDs || {});
@@ -1207,6 +1350,878 @@ async function displayMatingResults(data) {
   matingSection.appendChild(table);
   matingResultsContainer.appendChild(matingSection);
 }
+
+// Display all matings ranked results
+function displayAllMatingsResults(data) {
+  const { rankedMatings, totalCows, totalSires, totalMatings, config } = data;
+  
+  // Clear existing results
+  const allMatingsContainer = document.getElementById('all-matings-results-container');
+  if (allMatingsContainer) {
+    allMatingsContainer.innerHTML = '';
+  } else {
+    // Create container if it doesn't exist
+    const container = document.createElement('div');
+    container.id = 'all-matings-results-container';
+    container.style.marginTop = '30px';
+    matingResultsContainer.appendChild(container);
+  }
+  
+  const container = document.getElementById('all-matings-results-container');
+  
+  // Filter by gate if checkbox is checked
+  const showOnlyGatePass = gateFilterCheckbox && gateFilterCheckbox.checked;
+  const filteredMatings = showOnlyGatePass 
+    ? rankedMatings.filter(m => m.passedGate)
+    : rankedMatings;
+  
+  // Group by cow and sort sires within each cow by score (best to worst)
+  const matingsByCow = {};
+  filteredMatings.forEach(mating => {
+    const cowId = mating.cowId;
+    if (!matingsByCow[cowId]) {
+      matingsByCow[cowId] = {
+        cowId: cowId,
+        cowName: mating.cowName || cowId,
+        matings: []
+      };
+    }
+    matingsByCow[cowId].matings.push(mating);
+  });
+  
+  // Sort sires within each cow by score (descending - best first)
+  Object.keys(matingsByCow).forEach(cowId => {
+    matingsByCow[cowId].matings.sort((a, b) => {
+      // First by gate pass (passers first)
+      if (a.passedGate !== b.passedGate) {
+        return b.passedGate ? 1 : -1;
+      }
+      // Then by score (higher is better)
+      if (Math.abs(a.score - b.score) > 0.001) {
+        return b.score - a.score;
+      }
+      // Then by fewer below gray traits
+      if (a.numBelowGrayAllTraits !== b.numBelowGrayAllTraits) {
+        return a.numBelowGrayAllTraits - b.numBelowGrayAllTraits;
+      }
+      // Finally by more improved weaknesses
+      return b.improvedWeaknessesCount - a.improvedWeaknessesCount;
+    });
+  });
+  
+  // Get all unique traits from all matings
+  const allTraits = new Set();
+  filteredMatings.forEach(mating => {
+    Object.keys(mating.traitResults || {}).forEach(trait => allTraits.add(trait));
+  });
+  
+  // Sort traits according to predefined order
+  const sortedTraits = Array.from(allTraits).sort((a, b) => {
+    const indexA = traitOrder.indexOf(a);
+    const indexB = traitOrder.indexOf(b);
+    
+    // If both are in the order, sort by their position
+    if (indexA !== -1 && indexB !== -1) {
+      return indexA - indexB;
+    }
+    // If only A is in the order, A comes first
+    if (indexA !== -1) return -1;
+    // If only B is in the order, B comes first
+    if (indexB !== -1) return 1;
+    // If neither is in the order, sort alphabetically
+    return a.localeCompare(b);
+  });
+  
+  // Summary header
+  const summary = document.createElement('div');
+  summary.style.marginBottom = '20px';
+  summary.style.padding = '15px';
+  summary.style.backgroundColor = '#f8f9fa';
+  summary.style.borderRadius = '6px';
+  summary.innerHTML = `
+    <h3>All Matings Ranking Results (Grouped by Cow)</h3>
+    <p><strong>Total Matings Evaluated:</strong> ${totalMatings} (${totalCows} cows × ${totalSires} sires)</p>
+    <p><strong>Results Shown:</strong> ${filteredMatings.length} of ${rankedMatings.length} ranked matings</p>
+    <p><strong>Gate Traits:</strong> ${config.gateTraits.join(', ')}</p>
+    <p><strong>Herd Weakness Traits:</strong> ${config.herdWeaknessTraits.join(', ')}</p>
+  `;
+  container.appendChild(summary);
+  
+  // Calculate sire summary (how many times each bull was ranked #1, #2, etc. per cow)
+  const sireSummary = {};
+  Object.keys(matingsByCow).forEach(cowId => {
+    const cowGroup = matingsByCow[cowId];
+    cowGroup.matings.forEach((mating, sireIndex) => {
+      const rank = sireIndex + 1; // 1-based rank
+      const sireId = mating.sireId;
+      const sireName = mating.sireName || sireId;
+      
+      if (!sireSummary[sireId]) {
+        sireSummary[sireId] = {
+          sireName: sireName,
+          ranks: {} // rank -> count
+        };
+      }
+      
+      if (!sireSummary[sireId].ranks[rank]) {
+        sireSummary[sireId].ranks[rank] = 0;
+      }
+      sireSummary[sireId].ranks[rank]++;
+    });
+  });
+  
+  // Create sire summary table
+  const sireSummaryDiv = document.createElement('div');
+  sireSummaryDiv.style.marginBottom = '20px';
+  sireSummaryDiv.style.padding = '15px';
+  sireSummaryDiv.style.backgroundColor = '#e8f4f8';
+  sireSummaryDiv.style.borderRadius = '6px';
+  
+  const sireSummaryTitle = document.createElement('h4');
+  sireSummaryTitle.textContent = 'Sire Summary (Rankings per Cow)';
+  sireSummaryTitle.style.marginTop = '0';
+  sireSummaryTitle.style.marginBottom = '15px';
+  sireSummaryDiv.appendChild(sireSummaryTitle);
+  
+  // Get all unique ranks to determine columns
+  const allRanks = new Set();
+  Object.keys(sireSummary).forEach(sireId => {
+    Object.keys(sireSummary[sireId].ranks).forEach(rank => allRanks.add(parseInt(rank, 10)));
+  });
+  const sortedRanks = Array.from(allRanks).sort((a, b) => a - b);
+  
+  // Create summary table
+  const summaryTable = document.createElement('table');
+  summaryTable.style.borderCollapse = 'collapse';
+  summaryTable.style.width = '100%';
+  summaryTable.style.marginTop = '10px';
+  
+  // Header row
+  const summaryThead = document.createElement('thead');
+  const summaryHeaderRow = document.createElement('tr');
+  summaryHeaderRow.style.backgroundColor = '#d0e8f0';
+  summaryHeaderRow.style.fontWeight = 'bold';
+  
+  const summaryHeaders = ['Sire', ...sortedRanks.map(r => `#${r}`), 'Total'];
+  summaryHeaders.forEach(headerText => {
+    const th = document.createElement('th');
+    th.textContent = headerText;
+    th.style.padding = '8px';
+    th.style.border = '1px solid #000';
+    th.style.textAlign = 'center';
+    th.setAttribute('bgcolor', '#d0e8f0');
+    summaryHeaderRow.appendChild(th);
+  });
+  summaryThead.appendChild(summaryHeaderRow);
+  summaryTable.appendChild(summaryThead);
+  
+  // Body
+  const summaryTbody = document.createElement('tbody');
+  
+  // Sort sires by total count (descending)
+  const sortedSires = Object.keys(sireSummary).sort((a, b) => {
+    const totalA = Object.values(sireSummary[a].ranks).reduce((sum, count) => sum + count, 0);
+    const totalB = Object.values(sireSummary[b].ranks).reduce((sum, count) => sum + count, 0);
+    return totalB - totalA;
+  });
+  
+  sortedSires.forEach(sireId => {
+    const sire = sireSummary[sireId];
+    const row = document.createElement('tr');
+    
+    // Sire name
+    const sireNameCell = document.createElement('td');
+    sireNameCell.textContent = sire.sireName;
+    sireNameCell.style.padding = '8px';
+    sireNameCell.style.border = '1px solid #000';
+    sireNameCell.style.textAlign = 'left';
+    sireNameCell.style.fontWeight = 'bold';
+    row.appendChild(sireNameCell);
+    
+    // Rank counts
+    let total = 0;
+    sortedRanks.forEach(rank => {
+      const count = sire.ranks[rank] || 0;
+      total += count;
+      
+      const rankCell = document.createElement('td');
+      rankCell.textContent = count > 0 ? count : '';
+      rankCell.style.padding = '8px';
+      rankCell.style.border = '1px solid #000';
+      rankCell.style.textAlign = 'center';
+      // Highlight #1 rankings
+      if (rank === 1 && count > 0) {
+        rankCell.style.backgroundColor = '#d4edda';
+        rankCell.style.fontWeight = 'bold';
+      }
+      row.appendChild(rankCell);
+    });
+    
+    // Total
+    const totalCell = document.createElement('td');
+    totalCell.textContent = total;
+    totalCell.style.padding = '8px';
+    totalCell.style.border = '1px solid #000';
+    totalCell.style.textAlign = 'center';
+    totalCell.style.fontWeight = 'bold';
+    totalCell.style.backgroundColor = '#f0f0f0';
+    row.appendChild(totalCell);
+    
+    summaryTbody.appendChild(row);
+  });
+  
+  summaryTable.appendChild(summaryTbody);
+  sireSummaryDiv.appendChild(summaryTable);
+  container.appendChild(sireSummaryDiv);
+  
+  if (filteredMatings.length === 0) {
+    const noResults = document.createElement('p');
+    noResults.style.color = '#dc3545';
+    noResults.textContent = showOnlyGatePass 
+      ? 'No matings passed the gate filter. Try unchecking "Show only gate-pass".'
+      : 'No ranked matings found.';
+    container.appendChild(noResults);
+    return;
+  }
+  
+  // Create wrapper for horizontal scrolling
+  const tableWrapper = document.createElement('div');
+  tableWrapper.style.overflowX = 'auto';
+  tableWrapper.style.width = '100%';
+  tableWrapper.style.marginTop = '20px';
+  
+  // Create ranked table
+  const table = document.createElement('table');
+  table.className = 'epd-table';
+  table.style.borderCollapse = 'collapse';
+  table.style.width = '100%';
+  table.style.minWidth = 'max-content';
+  
+  // Header row
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  headerRow.style.backgroundColor = '#E0E0E0';
+  headerRow.style.fontWeight = 'bold';
+  
+  // Base headers
+  const baseHeaders = ['Cow', 'Sire Rank', 'Score', 'Gate', 'Sire'];
+  
+  // Add all trait headers
+  const headers = [...baseHeaders, ...sortedTraits];
+  
+  headers.forEach(headerText => {
+    const th = document.createElement('th');
+    th.textContent = headerText;
+    th.style.padding = '8px';
+    th.style.border = '1px solid #000';
+    th.style.textAlign = 'center';
+    th.style.whiteSpace = 'nowrap';
+    th.setAttribute('bgcolor', '#E0E0E0');
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+  
+  // Body
+  const tbody = document.createElement('tbody');
+  
+  // Iterate through cows
+  Object.keys(matingsByCow).forEach(cowId => {
+    const cowGroup = matingsByCow[cowId];
+    
+    cowGroup.matings.forEach((mating, sireIndex) => {
+      const row = document.createElement('tr');
+      row.dataset.matingIndex = sireIndex;
+      row.style.cursor = 'pointer';
+      row.title = 'Click to view detailed trait results';
+      
+      // Cow (only show on first row for each cow)
+      const cowCell = document.createElement('td');
+      if (sireIndex === 0) {
+        cowCell.textContent = cowGroup.cowName;
+        cowCell.style.fontWeight = 'bold';
+        cowCell.rowSpan = cowGroup.matings.length;
+        cowCell.style.verticalAlign = 'top';
+      }
+      cowCell.style.padding = '8px';
+      cowCell.style.border = '1px solid #000';
+      cowCell.style.textAlign = 'center';
+      cowCell.style.backgroundColor = sireIndex === 0 ? '#e8f4f8' : '';
+      if (sireIndex === 0) {
+        row.appendChild(cowCell);
+      }
+      
+      // Sire Rank (1, 2, 3, etc. for this cow)
+      const rankCell = document.createElement('td');
+      rankCell.textContent = sireIndex + 1;
+      rankCell.style.padding = '8px';
+      rankCell.style.border = '1px solid #000';
+      rankCell.style.textAlign = 'center';
+      rankCell.style.fontWeight = 'bold';
+      row.appendChild(rankCell);
+      
+      // Score
+      const scoreCell = document.createElement('td');
+      scoreCell.textContent = mating.score.toFixed(2);
+      scoreCell.style.padding = '8px';
+      scoreCell.style.border = '1px solid #000';
+      scoreCell.style.textAlign = 'center';
+      row.appendChild(scoreCell);
+      
+      // Gate
+      const gateCell = document.createElement('td');
+      gateCell.textContent = mating.passedGate ? '✓ Pass' : '✗ Fail';
+      gateCell.style.padding = '8px';
+      gateCell.style.border = '1px solid #000';
+      gateCell.style.textAlign = 'center';
+      gateCell.style.backgroundColor = mating.passedGate ? '#d4edda' : '#f8d7da';
+      gateCell.style.color = mating.passedGate ? '#155724' : '#721c24';
+      row.appendChild(gateCell);
+      
+      // Sire
+      const sireCell = document.createElement('td');
+      sireCell.textContent = mating.sireName || mating.sireId;
+      sireCell.style.padding = '8px';
+      sireCell.style.border = '1px solid #000';
+      sireCell.style.textAlign = 'center';
+      row.appendChild(sireCell);
+      
+      // All traits (show EPD value with color coding)
+      sortedTraits.forEach(trait => {
+        const traitCell = document.createElement('td');
+        const traitResult = mating.traitResults[trait];
+        
+        if (traitResult) {
+          // Show EPD value and percentile
+          const epdDisplay = traitResult.calfEpd >= 0 
+            ? `+${traitResult.calfEpd.toFixed(2)}` 
+            : traitResult.calfEpd.toFixed(2);
+          const percentileDisplay = traitResult.calfPercentile !== null 
+            ? ` (${traitResult.calfPercentile}%)` 
+            : '';
+          traitCell.textContent = epdDisplay + percentileDisplay;
+          traitCell.style.padding = '8px';
+          traitCell.style.border = '1px solid #000';
+          traitCell.style.textAlign = 'center';
+          traitCell.style.whiteSpace = 'nowrap';
+          traitCell.style.backgroundColor = traitResult.bgColor;
+          traitCell.style.color = traitResult.textColor;
+          traitCell.setAttribute('bgcolor', traitResult.bgColor);
+        } else {
+          traitCell.textContent = 'N/A';
+          traitCell.style.padding = '8px';
+          traitCell.style.border = '1px solid #000';
+          traitCell.style.textAlign = 'center';
+          traitCell.style.whiteSpace = 'nowrap';
+          traitCell.style.backgroundColor = '#FFFFFF';
+          traitCell.style.color = '#000000';
+        }
+        row.appendChild(traitCell);
+      });
+      
+      // Click handler to show detail
+      row.addEventListener('click', () => {
+        showMatingDetail(mating);
+      });
+      
+      // Hover effect
+      row.addEventListener('mouseenter', () => {
+        row.style.backgroundColor = '#f0f0f0';
+      });
+      row.addEventListener('mouseleave', () => {
+        row.style.backgroundColor = '';
+      });
+      
+      tbody.appendChild(row);
+    });
+  });
+  
+  table.appendChild(tbody);
+  tableWrapper.appendChild(table);
+  container.appendChild(tableWrapper);
+}
+
+// Show detailed mating view (reuses existing displayMatingResults)
+function showMatingDetail(mating) {
+  // Convert mating result format to displayMatingResults format
+  // Use full animal data if available, otherwise construct from mating result
+  const displayData = {
+    sire: {
+      registrationNumber: mating.sireId,
+      animalName: mating.sireName,
+      epdValues: mating.sireData?.epdValues || {}
+    },
+    dam: {
+      registrationNumber: mating.cowId,
+      animalName: mating.cowName,
+      epdValues: mating.cowData?.epdValues || {}
+    },
+    calculatedEPDs: {}
+  };
+  
+  // Convert traitResults to calculatedEPDs format
+  Object.keys(mating.traitResults).forEach(trait => {
+    const result = mating.traitResults[trait];
+    displayData.calculatedEPDs[trait] = {
+      epd: result.calfEpd >= 0 ? `+${result.calfEpd.toFixed(2)}` : result.calfEpd.toFixed(2),
+      estimatedPercentileRank: result.calfPercentile,
+      sireEPD: mating.sireData?.epdValues?.[trait]?.epd || 'N/A',
+      damEPD: mating.cowData?.epdValues?.[trait]?.epd || 'N/A'
+    };
+  });
+  
+  // Check if we're currently in All Matings mode
+  const isFromAllMatings = currentMatingMode === 'all';
+  
+  // Switch to single mating mode and display (but mark it as from All Matings)
+  if (isFromAllMatings) {
+    matingModeSingle.click();
+  }
+  displayMatingResults(displayData, isFromAllMatings);
+}
+
+// Herd Inventory Management
+const refreshInventoryBtn = document.getElementById('refresh-inventory-btn');
+const inventoryFilter = document.getElementById('inventory-filter');
+const inventorySearch = document.getElementById('inventory-search');
+const inventoryResultsContainer = document.getElementById('inventory-results-container');
+const compareSelectedBtn = document.getElementById('compare-selected-btn');
+const selectedCountSpan = document.getElementById('selected-count');
+
+let allInventoryAnimals = [];
+let selectedAnimals = new Set(); // Store registration numbers of selected animals
+
+// Load and display inventory
+async function loadInventory() {
+  try {
+    allInventoryAnimals = await window.electronAPI.getCachedAnimals();
+    displayInventory();
+  } catch (error) {
+    console.error('Error loading inventory:', error);
+    inventoryResultsContainer.innerHTML = '<p style="color: #dc3545;">Error loading inventory: ' + error.message + '</p>';
+  }
+}
+
+// Display inventory with filtering and search
+function displayInventory() {
+  let filtered = [...allInventoryAnimals];
+  
+  // Apply type filter
+  const filterValue = inventoryFilter ? inventoryFilter.value : 'all';
+  if (filterValue === 'cows') {
+    filtered = filtered.filter(animal => {
+      const sex = (animal.sex || '').toUpperCase();
+      return sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+    });
+  } else if (filterValue === 'sires') {
+    filtered = filtered.filter(animal => {
+      const sex = (animal.sex || '').toUpperCase();
+      return sex === 'BULL' || sex === 'MALE' || sex === 'STEER' || sex.includes('BULL') || sex.includes('MALE');
+    });
+  }
+  
+  // Apply search filter
+  const searchTerm = inventorySearch ? inventorySearch.value.toLowerCase().trim() : '';
+  if (searchTerm) {
+    filtered = filtered.filter(animal => {
+      const name = (animal.animalName || '').toLowerCase();
+      const regNum = (animal.registrationNumber || '').toLowerCase();
+      return name.includes(searchTerm) || regNum.includes(searchTerm);
+    });
+  }
+  
+  // Clear container
+  inventoryResultsContainer.innerHTML = '';
+  
+  if (filtered.length === 0) {
+    const noResults = document.createElement('p');
+    noResults.style.color = '#666';
+    noResults.textContent = 'No animals found matching the current filter.';
+    inventoryResultsContainer.appendChild(noResults);
+    return;
+  }
+  
+  // Create summary
+  const summary = document.createElement('div');
+  summary.style.marginBottom = '15px';
+  summary.style.padding = '10px';
+  summary.style.backgroundColor = '#f8f9fa';
+  summary.style.borderRadius = '6px';
+  summary.textContent = `Showing ${filtered.length} of ${allInventoryAnimals.length} animals`;
+  inventoryResultsContainer.appendChild(summary);
+  
+  // Create table
+  const table = document.createElement('table');
+  table.className = 'epd-table';
+  table.style.borderCollapse = 'collapse';
+  table.style.width = '100%';
+  table.style.marginTop = '10px';
+  
+  // Header
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  headerRow.style.backgroundColor = '#E0E0E0';
+  headerRow.style.fontWeight = 'bold';
+  
+  const headers = ['Select', 'Name', 'Registration Number', 'Sex', 'Cached At', 'Actions'];
+  headers.forEach((headerText, index) => {
+    const th = document.createElement('th');
+    if (headerText === 'Select') {
+      // Add select all checkbox
+      const selectAllLabel = document.createElement('label');
+      selectAllLabel.style.cursor = 'pointer';
+      selectAllLabel.style.display = 'flex';
+      selectAllLabel.style.alignItems = 'center';
+      selectAllLabel.style.justifyContent = 'center';
+      selectAllLabel.style.gap = '5px';
+      
+      const selectAllCheckbox = document.createElement('input');
+      selectAllCheckbox.type = 'checkbox';
+      selectAllCheckbox.id = 'select-all-inventory';
+      
+      // Check if all filtered animals are selected
+      const allSelected = filtered.length > 0 && filtered.every(a => selectedAnimals.has(a.registrationNumber));
+      selectAllCheckbox.checked = allSelected;
+      
+      selectAllCheckbox.addEventListener('change', () => {
+        if (selectAllCheckbox.checked) {
+          // Select all filtered animals
+          filtered.forEach(animal => {
+            selectedAnimals.add(animal.registrationNumber);
+          });
+        } else {
+          // Deselect all filtered animals
+          filtered.forEach(animal => {
+            selectedAnimals.delete(animal.registrationNumber);
+          });
+        }
+        updateSelectedCount();
+        displayInventory(); // Refresh to update checkbox states
+      });
+      
+      selectAllLabel.appendChild(selectAllCheckbox);
+      selectAllLabel.appendChild(document.createTextNode('All'));
+      th.appendChild(selectAllLabel);
+    } else {
+      th.textContent = headerText;
+    }
+    th.style.padding = '8px';
+    th.style.border = '1px solid #000';
+    th.style.textAlign = headerText === 'Select' ? 'center' : 'left';
+    th.setAttribute('bgcolor', '#E0E0E0');
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+  
+  // Body
+  const tbody = document.createElement('tbody');
+  
+  filtered.forEach(animal => {
+    const row = document.createElement('tr');
+    
+    // Checkbox for selection
+    const selectCell = document.createElement('td');
+    selectCell.style.padding = '8px';
+    selectCell.style.border = '1px solid #000';
+    selectCell.style.textAlign = 'center';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.registrationNumber = animal.registrationNumber;
+    checkbox.checked = selectedAnimals.has(animal.registrationNumber);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        selectedAnimals.add(animal.registrationNumber);
+      } else {
+        selectedAnimals.delete(animal.registrationNumber);
+      }
+      updateSelectedCount();
+    });
+    selectCell.appendChild(checkbox);
+    row.appendChild(selectCell);
+    
+    // Name
+    const nameCell = document.createElement('td');
+    nameCell.textContent = animal.animalName || 'N/A';
+    nameCell.style.padding = '8px';
+    nameCell.style.border = '1px solid #000';
+    row.appendChild(nameCell);
+    
+    // Registration Number
+    const regNumCell = document.createElement('td');
+    regNumCell.textContent = animal.registrationNumber;
+    regNumCell.style.padding = '8px';
+    regNumCell.style.border = '1px solid #000';
+    row.appendChild(regNumCell);
+    
+    // Sex
+    const sexCell = document.createElement('td');
+    sexCell.textContent = animal.sex || 'N/A';
+    sexCell.style.padding = '8px';
+    sexCell.style.border = '1px solid #000';
+    row.appendChild(sexCell);
+    
+    // Cached At
+    const cachedCell = document.createElement('td');
+    if (animal.cachedAt) {
+      const cachedDate = new Date(animal.cachedAt);
+      cachedCell.textContent = cachedDate.toLocaleDateString() + ' ' + cachedDate.toLocaleTimeString();
+    } else {
+      cachedCell.textContent = 'N/A';
+    }
+    cachedCell.style.padding = '8px';
+    cachedCell.style.border = '1px solid #000';
+    row.appendChild(cachedCell);
+    
+    // Actions
+    const actionsCell = document.createElement('td');
+    actionsCell.style.padding = '8px';
+    actionsCell.style.border = '1px solid #000';
+    
+    // View Details button
+    const viewBtn = document.createElement('button');
+    viewBtn.textContent = 'View Details';
+    viewBtn.className = 'btn btn-secondary';
+    viewBtn.style.marginRight = '5px';
+    viewBtn.style.padding = '4px 8px';
+    viewBtn.style.fontSize = '0.9em';
+    viewBtn.addEventListener('click', () => {
+      showAnimalDetailsModal(animal);
+    });
+    actionsCell.appendChild(viewBtn);
+    
+    // Delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.className = 'btn btn-secondary';
+    deleteBtn.style.padding = '4px 8px';
+    deleteBtn.style.fontSize = '0.9em';
+    deleteBtn.style.backgroundColor = '#dc3545';
+    deleteBtn.style.color = 'white';
+    deleteBtn.style.borderColor = '#dc3545';
+    deleteBtn.addEventListener('click', async () => {
+      if (confirm(`Are you sure you want to delete ${animal.animalName || animal.registrationNumber} from the cache?`)) {
+        try {
+          const result = await window.electronAPI.deleteCachedAnimal(animal.registrationNumber);
+          if (result.success) {
+            // Remove from selected animals if it was selected
+            selectedAnimals.delete(animal.registrationNumber);
+            // Remove from local array and refresh display
+            allInventoryAnimals = allInventoryAnimals.filter(a => a.registrationNumber !== animal.registrationNumber);
+            updateSelectedCount();
+            displayInventory();
+            // Also refresh cached animals dropdowns
+            loadCachedAnimals();
+          } else {
+            alert('Error deleting animal: ' + (result.error || 'Unknown error'));
+          }
+        } catch (error) {
+          alert('Error deleting animal: ' + error.message);
+        }
+      }
+    });
+    actionsCell.appendChild(deleteBtn);
+    
+    row.appendChild(actionsCell);
+    tbody.appendChild(row);
+  });
+  
+  table.appendChild(tbody);
+  inventoryResultsContainer.appendChild(table);
+}
+
+// Update selected count display
+function updateSelectedCount() {
+  const count = selectedAnimals.size;
+  if (selectedCountSpan) {
+    selectedCountSpan.textContent = count;
+  }
+  if (compareSelectedBtn) {
+    compareSelectedBtn.disabled = count === 0;
+  }
+}
+
+// Compare selected animals
+async function compareSelectedAnimals() {
+  if (selectedAnimals.size === 0) {
+    alert('Please select at least one animal to compare.');
+    return;
+  }
+  
+  const registrationNumbers = Array.from(selectedAnimals);
+  
+  // Set the registration input and trigger processing
+  registrationInput.value = registrationNumbers.join(', ');
+  
+  // Scroll to top to show the results
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  
+  // Trigger the scrape button
+  scrapeBtn.click();
+}
+
+// Event listeners
+if (refreshInventoryBtn) {
+  refreshInventoryBtn.addEventListener('click', loadInventory);
+}
+
+if (inventoryFilter) {
+  inventoryFilter.addEventListener('change', displayInventory);
+}
+
+if (inventorySearch) {
+  inventorySearch.addEventListener('input', displayInventory);
+}
+
+if (compareSelectedBtn) {
+  compareSelectedBtn.addEventListener('click', compareSelectedAnimals);
+}
+
+// Initialize selected count
+updateSelectedCount();
+
+// Modal functionality
+const animalDetailsModal = document.getElementById('animal-details-modal');
+const closeModalBtn = document.getElementById('close-modal-btn');
+const modalAnimalName = document.getElementById('modal-animal-name');
+const modalAnimalDetails = document.getElementById('modal-animal-details');
+
+// Close modal when clicking the X button
+if (closeModalBtn) {
+  closeModalBtn.addEventListener('click', () => {
+    animalDetailsModal.style.display = 'none';
+  });
+}
+
+// Close modal when clicking outside of it
+if (animalDetailsModal) {
+  animalDetailsModal.addEventListener('click', (e) => {
+    if (e.target === animalDetailsModal) {
+      animalDetailsModal.style.display = 'none';
+    }
+  });
+}
+
+// Close modal with Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && animalDetailsModal.style.display === 'block') {
+    animalDetailsModal.style.display = 'none';
+  }
+});
+
+// Show animal details in modal
+async function showAnimalDetailsModal(animal) {
+  if (!animalDetailsModal || !modalAnimalName || !modalAnimalDetails) {
+    console.error('Modal elements not found');
+    return;
+  }
+  
+  // Set animal name in header
+  modalAnimalName.textContent = `${animal.animalName || 'Unknown'} (${animal.registrationNumber})`;
+  
+  // Show loading state
+  modalAnimalDetails.innerHTML = '<p>Loading animal details...</p>';
+  animalDetailsModal.style.display = 'block';
+  
+  try {
+    // Process the animal to get its EPD data
+    const result = await window.electronAPI.scrapeEPD(animal.registrationNumber);
+    
+    if (result.success && result.data) {
+      const animalData = result.data;
+      
+      // Fetch percentile data for color coding
+      let percentileData = null;
+      try {
+        const animalType = (animalData.sex || '').toUpperCase().includes('COW') || 
+                           (animalData.sex || '').toUpperCase().includes('FEMALE') ? 'cow' : 'bull';
+        percentileData = await window.electronAPI.getPercentileData(animalType);
+      } catch (error) {
+        console.error('Error fetching percentile data for modal:', error);
+      }
+      
+      // Build HTML with animal info
+      let html = '<div style="margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 6px;">';
+      html += `<p><strong>Registration Number:</strong> ${animal.registrationNumber}</p>`;
+      html += `<p><strong>Name:</strong> ${animalData.animalName || 'N/A'}</p>`;
+      html += `<p><strong>Sex:</strong> ${animalData.sex || 'N/A'}</p>`;
+      if (animalData.additionalInfo) {
+        if (animalData.additionalInfo.Sire) {
+          html += `<p><strong>Sire:</strong> ${animalData.additionalInfo.Sire}</p>`;
+        }
+        if (animalData.additionalInfo.Dam) {
+          html += `<p><strong>Dam:</strong> ${animalData.additionalInfo.Dam}</p>`;
+        }
+        if (animalData.additionalInfo.BD) {
+          html += `<p><strong>Birth Date:</strong> ${animalData.additionalInfo.BD}</p>`;
+        }
+      }
+      html += '</div>';
+      
+      if (animalData.epdValues && Object.keys(animalData.epdValues).length > 0) {
+        // Create EPD table with color coding
+        html += '<h3 style="margin-top: 20px; margin-bottom: 10px;">EPD Values</h3>';
+        html += '<div style="overflow-x: auto;">';
+        html += '<table class="epd-table" style="border-collapse: collapse; width: 100%; margin-top: 10px;">';
+        html += '<thead><tr style="background-color: #E0E0E0; font-weight: bold;">';
+        html += '<th style="padding: 8px; border: 1px solid #000; text-align: center;">Trait</th>';
+        html += '<th style="padding: 8px; border: 1px solid #000; text-align: center;">EPD</th>';
+        html += '<th style="padding: 8px; border: 1px solid #000; text-align: center;">% Rank</th>';
+        html += '</tr></thead><tbody>';
+        
+        // Get all traits and sort them
+        const traits = Object.keys(animalData.epdValues);
+        const sortedTraits = traits.sort((a, b) => {
+          const indexA = traitOrder.indexOf(a);
+          const indexB = traitOrder.indexOf(b);
+          if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+          if (indexA !== -1) return -1;
+          if (indexB !== -1) return 1;
+          return a.localeCompare(b);
+        });
+        
+        sortedTraits.forEach(trait => {
+          const epdData = animalData.epdValues[trait];
+          const epd = epdData?.epd || 'N/A';
+          const percentRank = epdData?.percentRank || 'N/A';
+          
+          // Get color coding
+          let bgColor = '#FFFFFF';
+          let textColor = '#000000';
+          if (percentRank !== 'N/A' && percentRank !== null && colorCriteria) {
+            const epdNum = parseFloat(epd);
+            const animalType = (animalData.sex || '').toUpperCase().includes('COW') || 
+                               (animalData.sex || '').toUpperCase().includes('FEMALE') ? 'cow' : 'bull';
+            const colors = getColorForTrait(trait, percentRank.toString(), isNaN(epdNum) ? null : epdNum, percentileData, animalType);
+            bgColor = colors.bgColor;
+            textColor = colors.textColor;
+          }
+          
+          html += '<tr>';
+          html += `<td style="padding: 8px; border: 1px solid #000; text-align: center; font-weight: bold;">${trait}</td>`;
+          html += `<td style="padding: 8px; border: 1px solid #000; text-align: center; background-color: ${bgColor}; color: ${textColor};">${epd}</td>`;
+          html += `<td style="padding: 8px; border: 1px solid #000; text-align: center; background-color: ${bgColor}; color: ${textColor};">${percentRank}</td>`;
+          html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        html += '</div>';
+      } else {
+        html += '<p style="color: #666; margin-top: 20px;">No EPD data available for this animal.</p>';
+      }
+      
+      modalAnimalDetails.innerHTML = html;
+    } else {
+      modalAnimalDetails.innerHTML = '<p style="color: #dc3545;">Error loading animal details: ' + (result.error || 'Unknown error') + '</p>';
+    }
+  } catch (error) {
+    console.error('Error loading animal details:', error);
+    modalAnimalDetails.innerHTML = '<p style="color: #dc3545;">Error loading animal details: ' + error.message + '</p>';
+  }
+}
+
+// Load inventory on page load
+loadInventory();
 
 // Helper function to convert RGB to hex for Excel compatibility
 function rgbToHex(rgb) {

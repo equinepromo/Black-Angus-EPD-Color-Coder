@@ -10,6 +10,7 @@ const cacheUtil = require('./cache-util');
 const cacheCleanup = require('./cache-cleanup');
 const licenseManager = require('./license-manager');
 const updateManager = require('./update-manager');
+const matingRanker = require('./mating-ranker');
 
 let mainWindow;
 let scrapingQueue = [];
@@ -319,6 +320,12 @@ ipcMain.handle('get-cached-animals', async (event) => {
   return cacheUtil.getCachedAnimals();
 });
 
+// Delete a cached animal
+ipcMain.handle('delete-cached-animal', async (event, registrationNumber) => {
+  console.log('[MAIN] delete-cached-animal called for:', registrationNumber);
+  return cacheUtil.deleteCachedAnimal(registrationNumber);
+});
+
 ipcMain.handle('validate-license', async (event) => {
   return await licenseManager.validateLicense(true);
 });
@@ -548,6 +555,142 @@ ipcMain.handle('calculate-mating', async (event, { sireRegNum, damRegNum }) => {
   } catch (error) {
     console.error('[MAIN] Mating calculation failed:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// Rank all matings
+ipcMain.handle('rank-all-matings', async (event, config) => {
+  console.log('[MAIN] rank-all-matings called with config:', config);
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  try {
+    // Emit progress updates
+    const emitProgress = (step, total, message) => {
+      event.sender.send('mating-progress', { step, total, message });
+    };
+    
+    emitProgress(1, 6, 'Loading cached animals...');
+    
+    // Get all cached animals with full data
+    const allAnimals = cacheUtil.getCachedAnimalsWithData();
+    
+    if (allAnimals.length === 0) {
+      return { success: false, error: 'No cached animals found. Please scrape some animals first.' };
+    }
+    
+    emitProgress(2, 6, 'Filtering cows and sires...');
+    
+    // Filter into cows and sires
+    const cows = allAnimals.filter(animal => {
+      const sex = (animal.sex || '').toUpperCase();
+      return sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+    });
+    
+    const sires = allAnimals.filter(animal => {
+      const sex = (animal.sex || '').toUpperCase();
+      return sex === 'BULL' || sex === 'MALE' || sex === 'STEER' || sex.includes('BULL') || sex.includes('MALE');
+    });
+    
+    if (cows.length === 0) {
+      return { success: false, error: 'No cows found in cache. Please scrape some cows first.' };
+    }
+    
+    if (sires.length === 0) {
+      return { success: false, error: 'No sires found in cache. Please scrape some sires first.' };
+    }
+    
+    console.log(`[MAIN] Found ${cows.length} cows and ${sires.length} sires (${cows.length * sires.length} total matings)`);
+    
+    emitProgress(3, 6, 'Fetching percentile data...');
+    
+    // Fetch percentile data (use bull data for calves)
+    let percentileData = null;
+    try {
+      percentileData = await percentileLookup.fetchPercentileBreakdowns();
+    } catch (error) {
+      console.error('[MAIN] Error fetching percentile data:', error);
+      return { success: false, error: 'Failed to fetch percentile data: ' + error.message };
+    }
+    
+    emitProgress(4, 6, 'Loading color criteria...');
+    
+    // Load color criteria
+    const criteriaPath = path.join(__dirname, '../config/color-criteria.json');
+    let colorCriteria = null;
+    try {
+      const criteriaData = fs.readFileSync(criteriaPath, 'utf8');
+      colorCriteria = JSON.parse(criteriaData);
+    } catch (error) {
+      console.error('[MAIN] Error loading color criteria:', error);
+      return { success: false, error: 'Failed to load color criteria: ' + error.message };
+    }
+    
+    emitProgress(5, 6, 'Ranking all matings...');
+    
+    // Default configuration
+    const defaultConfig = {
+      herdWeaknessTraits: ['WW', 'YW', 'CLAW', 'ANGLE', '$M'],
+      gateTraits: ['WW', 'YW', 'CLAW', 'ANGLE', '$M'],
+      weaknessWeight: 2.0,
+      defaultWeight: 1.0,
+      topN: config?.topN || 50
+    };
+    
+    // Merge with provided config
+    const finalConfig = { ...defaultConfig, ...config };
+    
+    // Progress callback
+    const progressCallback = (processed, total) => {
+      const percentage = Math.floor((processed / total) * 100);
+      // Map to step 5 of 6, with percentage as message
+      emitProgress(5, 6, `Ranking matings... ${processed}/${total} (${percentage}%)`);
+    };
+    
+    // Rank all matings
+    const rankedMatings = matingRanker.rankAllMatings(
+      cows,
+      sires,
+      percentileData,
+      colorCriteria,
+      finalConfig,
+      progressCallback
+    );
+    
+    // Add full animal data to each mating result for detail view
+    const rankedMatingsWithData = rankedMatings.map(mating => {
+      const cowData = cows.find(c => c.registrationNumber === mating.cowId);
+      const sireData = sires.find(s => s.registrationNumber === mating.sireId);
+      
+      return {
+        ...mating,
+        cowData: cowData || null,
+        sireData: sireData || null
+      };
+    });
+    
+    emitProgress(6, 6, 'Complete!');
+    
+    console.log(`[MAIN] Ranking complete. Found ${rankedMatings.length} ranked matings`);
+    
+    return {
+      success: true,
+      data: {
+        rankedMatings: rankedMatingsWithData,
+        totalCows: cows.length,
+        totalSires: sires.length,
+        totalMatings: cows.length * sires.length,
+        config: finalConfig
+      }
+    };
+  } catch (error) {
+    console.error('[MAIN] Error ranking all matings:', error);
+    console.error('[MAIN] Error stack:', error.stack);
+    return { success: false, error: error.message || String(error) };
   }
 });
 
