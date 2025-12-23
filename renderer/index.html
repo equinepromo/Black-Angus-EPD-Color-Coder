@@ -41,7 +41,17 @@
             </div>
         </div>
 
+        <!-- Tab Navigation -->
+        <div class="tabs-container">
+            <button class="tab-button active" data-tab="animal-entry">Animal Entry</button>
+            <button class="tab-button" data-tab="herd-inventory">Herd Inventory</button>
+            <button class="tab-button" data-tab="mating-calculator">Mating Calculator</button>
+        </div>
+
+        <!-- Animal Entry Tab -->
+        <div id="animal-entry-tab" class="tab-content active">
         <div class="input-section">
+            <h2 style="margin-bottom: 20px; color: #333;">Animal Entry</h2>
             <div class="input-group">
                 <label for="registration-input">Registration Number(s):</label>
                 <div style="position: relative;">
@@ -67,7 +77,7 @@
                 <button id="scrape-btn" class="btn btn-primary">Process</button>
                 <button id="copy-table-btn" class="btn btn-secondary" disabled title="Copy table (colors may not work in Excel - use 'Export to Excel' for full formatting)">Copy Table</button>
                 <button id="export-excel-btn" class="btn btn-secondary" disabled>Export to Excel</button>
-                <button id="clear-cache-btn" class="btn btn-secondary">Clear Cache</button>
+                <button id="clear-cache-btn" class="btn btn-secondary">Force Refresh</button>
             </div>
 
             <div class="progress-section" id="progress-section" style="display: none; margin-top: 15px;">
@@ -85,9 +95,44 @@
                 </div>
             </div>
         </div>
+        </div>
 
-        <div class="input-section" style="margin-top: 30px; padding-top: 30px; border-top: 2px solid #ddd;">
-            <h2 style="margin-bottom: 15px;">Mating Calculator</h2>
+        <!-- Herd Inventory Tab -->
+        <div id="herd-inventory-tab" class="tab-content">
+        <div class="input-section">
+            <h2 style="margin-bottom: 20px; color: #333;">Herd Inventory</h2>
+            
+            <div class="button-group" style="margin-bottom: 15px;">
+                <button id="refresh-inventory-btn" class="btn btn-primary">Refresh List</button>
+                <select id="inventory-filter" style="margin-left: 10px; padding: 8px;">
+                    <option value="all">All Animals</option>
+                    <option value="cows">Cows Only</option>
+                    <option value="sires">Sires Only</option>
+                </select>
+                <select id="category-filter" style="margin-left: 10px; padding: 8px;">
+                    <option value="all">All Categories</option>
+                </select>
+                <input type="text" id="inventory-search" placeholder="Search by name or registration number..." style="margin-left: 10px; padding: 8px; width: 300px;">
+                <button id="compare-selected-btn" class="btn btn-primary" style="margin-left: 10px;" disabled>Compare Selected (<span id="selected-count">0</span>)</button>
+                <button id="bulk-change-category-btn" class="btn btn-secondary" style="margin-left: 10px;" disabled>Change Category (<span id="selected-count-2">0</span>)</button>
+                <button id="manage-categories-btn" class="btn btn-secondary" style="margin-left: 10px;">Manage Categories</button>
+                <button id="delete-category-btn" class="btn btn-secondary" style="margin-left: 10px;">Delete Category Animals</button>
+            </div>
+
+            <div class="results-section" style="margin-top: 15px;">
+                <div id="inventory-results-container">
+                    <div class="placeholder">
+                        <p>Click "Refresh List" to view your herd inventory</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <!-- Mating Calculator Tab -->
+        <div id="mating-calculator-tab" class="tab-content">
+        <div class="input-section">
+            <h2 style="margin-bottom: 20px; color: #333;">Mating Calculator</h2>
             
             <!-- Mode Toggle -->
             <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
@@ -176,37 +221,7 @@
                 </div>
             </div>
         </div>
-
-        <div class="input-section" style="margin-top: 30px; padding-top: 30px; border-top: 2px solid #ddd;">
-            <h2 style="margin-bottom: 15px;">Herd Inventory</h2>
-            
-            <div class="button-group" style="margin-bottom: 15px;">
-                <button id="refresh-inventory-btn" class="btn btn-primary">Refresh List</button>
-                <select id="inventory-filter" style="margin-left: 10px; padding: 8px;">
-                    <option value="all">All Animals</option>
-                    <option value="cows">Cows Only</option>
-                    <option value="sires">Sires Only</option>
-                </select>
-                <select id="category-filter" style="margin-left: 10px; padding: 8px;">
-                    <option value="all">All Categories</option>
-                </select>
-                <input type="text" id="inventory-search" placeholder="Search by name or registration number..." style="margin-left: 10px; padding: 8px; width: 300px;">
-                <button id="compare-selected-btn" class="btn btn-primary" style="margin-left: 10px;" disabled>Compare Selected (<span id="selected-count">0</span>)</button>
-                <button id="bulk-change-category-btn" class="btn btn-secondary" style="margin-left: 10px;" disabled>Change Category (<span id="selected-count-2">0</span>)</button>
-                <button id="manage-categories-btn" class="btn btn-secondary" style="margin-left: 10px;">Manage Categories</button>
-                <button id="delete-category-btn" class="btn btn-secondary" style="margin-left: 10px;">Delete Category Animals</button>
-            </div>
-
-            <div class="results-section" style="margin-top: 15px;">
-                <div id="inventory-results-container">
-                    <div class="placeholder">
-                        <p>Click "Refresh List" to view your herd inventory</p>
-                    </div>
-                </div>
-            </div>
         </div>
-
-    </div>
 
     <!-- Animal Details Modal -->
     <div id="animal-details-modal" class="modal" style="display: none;">

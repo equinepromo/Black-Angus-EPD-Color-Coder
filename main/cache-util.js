@@ -202,7 +202,58 @@ function deleteCachedAnimal(registrationNumber) {
 }
 
 /**
- * Clear all cache files
+ * Invalidate all cache files (force refresh by making them appear expired)
+ * This updates file modification times to force re-fetching on next scrape
+ */
+function invalidateAllCache() {
+  try {
+    const cacheDir = ensureCacheDir();
+    
+    if (!fs.existsSync(cacheDir)) {
+      return { success: true, invalidatedCount: 0 };
+    }
+    
+    const files = fs.readdirSync(cacheDir);
+    const epdFiles = files.filter(f => f.startsWith('epd_') && f.endsWith('.json'));
+    let invalidatedCount = 0;
+    
+    // Set modification time to a date far in the past to make cache appear expired
+    const expiredDate = new Date(2000, 0, 1); // January 1, 2000
+    
+    epdFiles.forEach(file => {
+      try {
+        const filePath = path.join(cacheDir, file);
+        fs.utimesSync(filePath, expiredDate, expiredDate);
+        invalidatedCount++;
+        console.log(`[CACHE] Invalidated cache file: ${file}`);
+      } catch (error) {
+        console.error(`[CACHE] Error invalidating cache file ${file}:`, error);
+      }
+    });
+    
+    // Also invalidate percentile breakdowns cache if it exists
+    const percentileCachePath = getCacheFilePath('percentile-breakdowns');
+    if (fs.existsSync(percentileCachePath)) {
+      try {
+        fs.utimesSync(percentileCachePath, expiredDate, expiredDate);
+        console.log(`[CACHE] Invalidated percentile breakdowns cache`);
+      } catch (error) {
+        console.error(`[CACHE] Error invalidating percentile cache:`, error);
+      }
+    }
+    
+    console.log(`[CACHE] invalidateAllCache() completed - invalidated ${invalidatedCount} cache file(s)`);
+    return { success: true, invalidatedCount };
+  } catch (error) {
+    console.error('[CACHE] Error invalidating cache:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Clear all cache files (delete them)
+ * NOTE: This function is kept for backward compatibility but should not be used for "Clear Cache" button
+ * Use invalidateAllCache() instead to force refresh without losing data
  */
 function clearAllCache() {
   try {
@@ -635,6 +686,7 @@ module.exports = {
   saveCategories,
   addCategory,
   deleteCategory,
+  invalidateAllCache,
   clearAllCache,
   getCacheStats,
   getCachedAnimals,

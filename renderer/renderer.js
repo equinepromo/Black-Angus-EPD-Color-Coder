@@ -2927,6 +2927,27 @@ if (manageCategoriesBtn) {
 // Load inventory on page load
 loadInventory();
 
+// Tab Navigation Functionality
+const tabButtons = document.querySelectorAll('.tab-button');
+const tabContents = document.querySelectorAll('.tab-content');
+
+tabButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const targetTab = button.dataset.tab;
+    
+    // Remove active class from all buttons and contents
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    tabContents.forEach(content => content.classList.remove('active'));
+    
+    // Add active class to clicked button and corresponding content
+    button.classList.add('active');
+    const targetContent = document.getElementById(`${targetTab}-tab`);
+    if (targetContent) {
+      targetContent.classList.add('active');
+    }
+  });
+});
+
 // Helper function to convert RGB to hex for Excel compatibility
 function rgbToHex(rgb) {
   if (!rgb) return '#FFFFFF';
@@ -3161,27 +3182,27 @@ updateDismissBtn.addEventListener('click', () => {
 
 // Clear cache button
 clearCacheBtn.addEventListener('click', async () => {
-  if (!confirm('Are you sure you want to clear all cached data? This will force the app to re-fetch all EPD data and percentile breakdowns on the next lookup.')) {
+  if (!confirm('This will mark all cached data as expired, forcing fresh data to be fetched on the next scrape. The cached files will remain but will be refreshed. Continue?')) {
     return;
   }
 
   try {
     clearCacheBtn.disabled = true;
-    clearCacheBtn.textContent = 'Clearing...';
-    
-    const result = await window.electronAPI.clearCache();
-    
+    clearCacheBtn.textContent = 'Refreshing...';
+
+    const result = await window.electronAPI.invalidateCache();
+
     if (result.success) {
-      alert(`Cache cleared successfully! ${result.deletedCount || 0} file(s) deleted.`);
-      clearCacheBtn.textContent = 'Clear Cache';
+      alert(`Cache invalidated successfully! ${result.invalidatedCount || 0} cache file(s) will be refreshed on next scrape.`);
+      clearCacheBtn.textContent = 'Force Refresh';
     } else {
-      alert('Error clearing cache: ' + (result.error || 'Unknown error'));
-      clearCacheBtn.textContent = 'Clear Cache';
+      alert('Error invalidating cache: ' + (result.error || 'Unknown error'));
+      clearCacheBtn.textContent = 'Force Refresh';
     }
   } catch (error) {
-    console.error('Error clearing cache:', error);
-    alert('Error clearing cache: ' + error.message);
-    clearCacheBtn.textContent = 'Clear Cache';
+    console.error('Error invalidating cache:', error);
+    alert('Error invalidating cache: ' + error.message);
+    clearCacheBtn.textContent = 'Force Refresh';
   } finally {
     clearCacheBtn.disabled = false;
   }

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportToExcel: (data) => ipcRenderer.invoke('export-to-excel', data),
   calculateMating: (sireRegNum, damRegNum) => ipcRenderer.invoke('calculate-mating', { sireRegNum, damRegNum }),
   rankAllMatings: (config) => ipcRenderer.invoke('rank-all-matings', config),
+  invalidateCache: () => ipcRenderer.invoke('invalidate-cache'),
   clearCache: () => ipcRenderer.invoke('clear-cache'),
   getLicenseStatus: () => ipcRenderer.invoke('get-license-status'),
   validateLicense: () => ipcRenderer.invoke('validate-license'),

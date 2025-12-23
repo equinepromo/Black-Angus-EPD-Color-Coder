@@ -611,6 +611,73 @@ table td {
     border-color: #bd2130;
 }
 
+/* Tab Navigation Styles */
+.tabs-container {
+    display: flex;
+    gap: 0;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #e0e0e0;
+    background-color: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+    padding: 0;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 15px 25px;
+    background-color: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    color: #666;
+    transition: all 0.3s ease;
+    position: relative;
+    outline: none;
+}
+
+.tab-button:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: #333;
+}
+
+.tab-button.active {
+    color: #c8102e;
+    border-bottom-color: #c8102e;
+    background-color: white;
+}
+
+.tab-button.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: #c8102e;
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* Update Notification Styles */
 .update-notification {
     background: linear-gradient(135deg, #006400 0%, #32CD32 100%);

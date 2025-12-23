@@ -83,8 +83,10 @@ function createWindow() {
   console.log('[MAIN] Creating main window with icon:', mainIcon ? 'found' : 'using default');
   
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1600,
+    height: 1000,
+    minWidth: 1200,
+    minHeight: 800,
     title: 'Black Angus EPD Color Coder',
     icon: mainIcon,
     webPreferences: {
@@ -740,7 +742,19 @@ ipcMain.handle('rank-all-matings', async (event, config) => {
   }
 });
 
-// Clear cache
+// Invalidate cache (force refresh without deleting files)
+ipcMain.handle('invalidate-cache', async (event) => {
+  console.log('[MAIN] invalidate-cache IPC handler called');
+  try {
+    const result = cacheUtil.invalidateAllCache();
+    return result;
+  } catch (error) {
+    console.error('[MAIN] Error invalidating cache:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Clear cache (delete files) - kept for backward compatibility
 ipcMain.handle('clear-cache', async (event) => {
   console.log('[MAIN] clear-cache IPC handler called');
   try {
