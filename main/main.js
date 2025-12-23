@@ -441,52 +441,87 @@ ipcMain.handle('scrape-batch', async (event, registrationNumbers, category) => {
   const results = [];
   const puppeteer = require('puppeteer');
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const cacheUtil = require('./cache-util');
   
   // Use selected category or default to 'My Herd'
   const selectedCategory = category || 'My Herd';
   console.log('[MAIN] scrape-batch called with category:', selectedCategory);
   
-  // Reuse browser instance for all scrapes (major performance improvement)
+  // Pre-check cache to determine which items need scraping (optimization: avoid launching browser if all cached)
+  const needsScraping = [];
+  const cachedResults = new Map();
+  
+  for (const regNum of registrationNumbers) {
+    const cacheKey = `epd_${regNum}`;
+    const cached = cacheUtil.loadCache(cacheKey);
+    if (cached && cached.data) {
+      cachedResults.set(regNum, cached.data);
+    } else {
+      needsScraping.push(regNum);
+    }
+  }
+  
+  console.log(`[MAIN] Batch processing: ${cachedResults.size} cached, ${needsScraping.length} need scraping`);
+  
+  // Process cached items first (instant, no delays)
+  for (const regNum of Array.from(cachedResults.keys())) {
+    const data = cachedResults.get(regNum);
+    results.push({ registrationNumber: regNum, success: true, data: { ...data, _fromCache: true } });
+    event.sender.send('scrape-progress', {
+      completed: results.length,
+      total: registrationNumbers.length,
+      current: regNum
+    });
+  }
+  
+  // Process items that need scraping (only launch browser if needed)
   let browser = null;
+  const scraper = require('./scraper-puppeteer');
   
   try {
-    // Launch browser once for the entire batch
-    console.log('[MAIN] Launching browser for batch processing...');
-    // Use the same helper function as the scraper
-    const scraper = require('./scraper-puppeteer');
-    const launchOptions = scraper.getPuppeteerLaunchOptions();
-    browser = await puppeteer.launch(launchOptions);
-
-    for (let i = 0; i < registrationNumbers.length; i++) {
-      const regNum = registrationNumbers[i];
-      try {
-        // Pass browser instance to reuse it, and pass category
-        const result = await scraper.scrapeEPD(regNum, browser, false, selectedCategory);
-        results.push({ registrationNumber: regNum, success: true, data: result });
-        
-        // Reduced rate limiting: wait 0.5-1 second between requests (was 2-3 seconds)
-        if (i < registrationNumbers.length - 1) {
-          const waitTime = 500 + Math.random() * 500; // 0.5-1 seconds
-          await delay(waitTime);
-        }
-      } catch (error) {
-        results.push({ registrationNumber: regNum, success: false, error: error.message });
-      }
+    if (needsScraping.length > 0) {
+      // Launch browser only if we have items to scrape
+      console.log('[MAIN] Launching browser for batch processing...');
+      const launchOptions = scraper.getPuppeteerLaunchOptions();
+      browser = await puppeteer.launch(launchOptions);
       
-      // Send progress update
-      event.sender.send('scrape-progress', {
-        completed: i + 1,
-        total: registrationNumbers.length,
-        current: regNum
-      });
+      for (let i = 0; i < needsScraping.length; i++) {
+        const regNum = needsScraping[i];
+        try {
+          const result = await scraper.scrapeEPD(regNum, browser, false, selectedCategory);
+          results.push({ registrationNumber: regNum, success: true, data: result });
+          
+          // Add delay between scraping requests (not for cached items)
+          if (i < needsScraping.length - 1) {
+            const waitTime = 500 + Math.random() * 500; // 0.5-1 seconds
+            await delay(waitTime);
+          }
+        } catch (error) {
+          results.push({ registrationNumber: regNum, success: false, error: error.message });
+        }
+        
+        // Send progress update
+        event.sender.send('scrape-progress', {
+          completed: results.length,
+          total: registrationNumbers.length,
+          current: regNum
+        });
+      }
     }
   } finally {
-    // Close browser after all scrapes are done
+    // Close browser after all scrapes are done (if we launched it)
     if (browser) {
       console.log('[MAIN] Closing browser after batch processing...');
       await browser.close();
     }
   }
+  
+  // Sort results to match original registration number order
+  const resultMap = new Map();
+  results.forEach(r => resultMap.set(r.registrationNumber, r));
+  const sortedResults = registrationNumbers.map(regNum => resultMap.get(regNum)).filter(r => r);
+  
+  return sortedResults.length > 0 ? sortedResults : results;
 
   return results;
 });
@@ -680,12 +715,9 @@ ipcMain.handle('rank-all-matings', async (event, config) => {
     
     emitProgress(5, 6, 'Ranking all matings...');
     
-    // Default configuration
+    // Default configuration - emphasis-based system, no default gate traits
     const defaultConfig = {
-      herdWeaknessTraits: ['WW', 'YW', 'CLAW', 'ANGLE', '$M'],
-      gateTraits: ['WW', 'YW', 'CLAW', 'ANGLE', '$M'],
-      weaknessWeight: 2.0,
-      defaultWeight: 1.0,
+      gateTraits: [], // No default gates - user must configure via UI
       topN: config?.topN || 50
     };
     

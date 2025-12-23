@@ -2,6 +2,75 @@ const percentileLookup = require('./percentile-lookup');
 const path = require('path');
 const fs = require('fs');
 
+// Emphasis values by trait (NOT multipliers - used for relative weighting)
+const emphasisByTrait = {
+  CED: 4,
+  BW: 1,
+  WW: 6,
+  YW: 4,
+  RADG: 1,
+  DMI: 2,
+  YH: 0,
+  SC: 0,
+  DOC: 3,
+  CLAW: 4,
+  ANGLE: 0,
+  PAP: 1,
+  HS: 1,
+  HP: 3,
+  CEM: 0,
+  MILK: 0,
+  TEAT: 0,
+  UDDR: 0,
+  FL: 0,
+  MW: 2,
+  MH: 2,
+  $EN: 0,
+  CW: 3,
+  MARB: 6,
+  RE: 3,
+  FAT: 0,
+  $M: 8,
+  $B: 6,
+  $C: 8
+};
+
+// Normalization tuning parameter (0.5-0.8 recommended, default 0.7)
+const ALPHA = 0.7;
+
+// Calculate max emphasis for normalization
+const maxEmphasis = Math.max(...Object.values(emphasisByTrait));
+
+// Trait direction: true = higher is better, false = lower is better
+const traitDirection = {
+  'CED': true, 'BW': false, 'WW': true, 'YW': true, 'RADG': true, 'DOC': true,
+  'CLAW': false, 'ANGLE': false, 'HS': false, 'HP': true, 'CEM': true,
+  'MARB': true, 'RE': true, '$M': true, '$B': true, '$C': true
+};
+
+/**
+ * Check if a trait value is better than another value
+ * @param {string} trait - Trait name
+ * @param {number} value1 - First value (calf)
+ * @param {number} value2 - Second value (cow)
+ * @returns {boolean} True if value1 is better than value2
+ */
+function isValueBetter(trait, value1, value2) {
+  const isHigherBetter = traitDirection[trait] !== false; // Default to true if not specified
+  return isHigherBetter ? (value1 > value2) : (value1 < value2);
+}
+
+/**
+ * Get normalized weight for a trait based on emphasis
+ * @param {string} trait - Trait name
+ * @returns {number} Weight between 1.0 and 1.7 (1.0 + alpha)
+ */
+function getTraitWeight(trait) {
+  const raw = emphasisByTrait[trait] ?? 0;
+  const normalized = raw / maxEmphasis; // 0..1
+  return 1 + (normalized * ALPHA); // final range: 1.0 → 1.7
+}
+
 // Band definitions
 const BANDS = {
   DARK_GREEN: 'DARK_GREEN',
@@ -163,10 +232,7 @@ function colorFromPercentile(trait, percentile, colorCriteria) {
  */
 function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config) {
   const {
-    herdWeaknessTraits = ['WW', 'YW', 'CLAW', 'ANGLE', '$M'],
-    gateTraits = ['WW', 'YW', 'CLAW', 'ANGLE', '$M'],
-    weaknessWeight = 2.0,
-    defaultWeight = 1.0
+    gateTraits = [] // No default gate traits - must be configured by user
   } = config;
   
   const traitResults = {};
@@ -174,7 +240,9 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
   let belowGrayPenalty = 0;
   let extraGatePenalty = 0;
   let numBelowGrayAllTraits = 0;
-  let improvedWeaknessesCount = 0;
+  let improvedEmphasisTraitsCount = 0;
+  let improvedTraitsCount = 0; // Traits improved from cow EPD
+  let worsenedTraitsCount = 0; // Traits worsened from cow EPD
   const failedGateTraits = [];
   
   // Process each trait
@@ -197,6 +265,19 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
     // Calculate calf EPD
     const calfEpd = (sireValue + cowValue) / 2;
     
+    // Compare calf EPD to cow EPD to determine if improved or worsened
+    // Only count if values are different (not equal)
+    if (calfEpd !== cowValue) {
+      const isImproved = isValueBetter(trait, calfEpd, cowValue);
+      const isWorsened = isValueBetter(trait, cowValue, calfEpd);
+      
+      if (isImproved) {
+        improvedTraitsCount++;
+      } else if (isWorsened) {
+        worsenedTraitsCount++;
+      }
+    }
+    
     // Get percentile
     const calfPercentile = percentileFromEpd(trait, calfEpd, percentileData);
     
@@ -208,13 +289,13 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
     // Get band
     const band = bandFromBgColor(colors.bgColor);
     
-    // Determine weight
-    const weight = herdWeaknessTraits.includes(trait) ? weaknessWeight : defaultWeight;
+    // Get normalized weight based on emphasis
+    const weight = getTraitWeight(trait);
     
     // Get color goodness
     const goodness = getColorGoodness(band);
     
-    // Add to base score
+    // Add to base score (all traits contribute)
     baseScore += weight * goodness;
     
     // Check if worse than gray
@@ -224,19 +305,20 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
       const grayRank = getColorRank(BANDS.GRAY);
       const rankDiff = colorRank - grayRank;
       
-      // Below gray penalty
+      // Below gray penalty (applied to all traits worse than Gray)
       belowGrayPenalty += rankDiff * 0.25 * weight;
       
       // Extra gate penalty if this is a gate trait
-      if (gateTraits.includes(trait)) {
+      if (gateTraits.length > 0 && gateTraits.includes(trait)) {
         extraGatePenalty += rankDiff * 0.60 * weight;
         failedGateTraits.push(trait);
       }
     }
     
-    // Check if weakness trait is improved (at or better than gray)
-    if (herdWeaknessTraits.includes(trait) && !isWorseThanGray(band)) {
-      improvedWeaknessesCount++;
+    // Check if emphasis trait is improved (at or better than gray)
+    const emphasis = emphasisByTrait[trait] ?? 0;
+    if (emphasis > 0 && !isWorseThanGray(band)) {
+      improvedEmphasisTraitsCount++;
     }
     
     // Store trait result
@@ -247,6 +329,7 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
       textColor: colors.textColor,
       band: band,
       weight: weight,
+      emphasis: emphasis,
       colorGoodness: goodness
     };
   }
@@ -254,8 +337,8 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
   // Calculate final score
   const finalScore = baseScore - belowGrayPenalty - extraGatePenalty;
   
-  // Check gate (all gate traits must be <= GRAY)
-  const passedGate = gateTraits.every(trait => {
+  // Check gate (all gate traits must be <= GRAY, or no gates if empty)
+  const passedGate = gateTraits.length === 0 || gateTraits.every(trait => {
     const result = traitResults[trait];
     if (!result) return false; // Missing data fails gate
     return !isWorseThanGray(result.band);
@@ -270,7 +353,9 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
     failedGateTraits: failedGateTraits,
     score: finalScore,
     numBelowGrayAllTraits: numBelowGrayAllTraits,
-    improvedWeaknessesCount: improvedWeaknessesCount,
+    improvedEmphasisTraitsCount: improvedEmphasisTraitsCount,
+    improvedTraitsCount: improvedTraitsCount,
+    worsenedTraitsCount: worsenedTraitsCount,
     traitResults: traitResults
   };
 }
@@ -339,9 +424,9 @@ function rankAllMatings(cows, sires, percentileData, colorCriteria, config, prog
       return a.numBelowGrayAllTraits - b.numBelowGrayAllTraits;
     }
     
-    // 4. improvedWeaknessesCount (desc) - more improved weaknesses first
-    if (a.improvedWeaknessesCount !== b.improvedWeaknessesCount) {
-      return b.improvedWeaknessesCount - a.improvedWeaknessesCount;
+    // 4. improvedEmphasisTraitsCount (desc) - more improved emphasis traits first
+    if (a.improvedEmphasisTraitsCount !== b.improvedEmphasisTraitsCount) {
+      return b.improvedEmphasisTraitsCount - a.improvedEmphasisTraitsCount;
     }
     
     // Tie-breaker: alphabetical by cow name, then sire name
@@ -385,9 +470,9 @@ function rankAllMatings(cows, sires, percentileData, colorCriteria, config, prog
     if (a.numBelowGrayAllTraits !== b.numBelowGrayAllTraits) {
       return a.numBelowGrayAllTraits - b.numBelowGrayAllTraits;
     }
-    // 4. improvedWeaknessesCount (desc)
-    if (a.improvedWeaknessesCount !== b.improvedWeaknessesCount) {
-      return b.improvedWeaknessesCount - a.improvedWeaknessesCount;
+    // 4. improvedEmphasisTraitsCount (desc)
+    if (a.improvedEmphasisTraitsCount !== b.improvedEmphasisTraitsCount) {
+      return b.improvedEmphasisTraitsCount - a.improvedEmphasisTraitsCount;
     }
     // Final tie-breaker: sire name
     return a.sireName.localeCompare(b.sireName);
@@ -398,6 +483,9 @@ function rankAllMatings(cows, sires, percentileData, colorCriteria, config, prog
 
 module.exports = {
   BANDS,
+  emphasisByTrait,
+  getTraitWeight,
+  isValueBetter,
   bandFromBgColor,
   getColorRank,
   getColorGoodness,

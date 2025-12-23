@@ -24,6 +24,29 @@ function saveColumnVisibilityPreferences(preferences) {
   }
 }
 
+// Gate traits preferences storage
+const GATE_TRAITS_STORAGE_KEY = 'gate-traits-selection';
+
+function loadGateTraitsPreferences() {
+  try {
+    const saved = localStorage.getItem(GATE_TRAITS_STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('Error loading gate traits preferences:', error);
+  }
+  return [];
+}
+
+function saveGateTraitsPreferences(selectedTraits) {
+  try {
+    localStorage.setItem(GATE_TRAITS_STORAGE_KEY, JSON.stringify(selectedTraits));
+  } catch (error) {
+    console.error('Error saving gate traits preferences:', error);
+  }
+}
+
 // Define the trait order - only traits in this list will be color coded
 const traitOrder = [
   'CED', 'BW', 'WW', 'YW', 'RADG', 'DMI', 'YH', 'SC', 'DOC', 'CLAW',
@@ -310,10 +333,65 @@ calculateMatingBtn.addEventListener('click', async () => {
 // Rank All Matings button
 const rankAllMatingsBtn = document.getElementById('rank-all-matings-btn');
 const topNSelect = document.getElementById('top-n-select');
+const gateTraitsCheckboxesContainer = document.getElementById('gate-traits-checkboxes');
 const gateFilterCheckbox = document.getElementById('gate-filter-checkbox');
 
 // Store last ranked results for filtering
 let lastRankedResults = null;
+
+// Populate gate traits checkboxes with available traits
+function populateGateTraitsCheckboxes() {
+  if (!gateTraitsCheckboxesContainer) return;
+  
+  // Load saved preferences
+  const savedTraits = loadGateTraitsPreferences();
+  const savedSet = new Set(savedTraits);
+  
+  // Use the traitOrder array which contains all available traits
+  gateTraitsCheckboxesContainer.innerHTML = '';
+  traitOrder.forEach(trait => {
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.style.display = 'flex';
+    checkboxContainer.style.alignItems = 'center';
+    checkboxContainer.style.gap = '5px';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `gate-trait-${trait}`;
+    checkbox.value = trait;
+    checkbox.checked = savedSet.has(trait);
+    checkbox.style.margin = '0';
+    checkbox.style.cursor = 'pointer';
+    
+    const label = document.createElement('label');
+    label.htmlFor = `gate-trait-${trait}`;
+    label.textContent = trait;
+    label.style.cursor = 'pointer';
+    label.style.userSelect = 'none';
+    label.style.margin = '0';
+    
+    // Save preferences when checkbox changes
+    checkbox.addEventListener('change', () => {
+      const selectedTraits = getSelectedGateTraits();
+      saveGateTraitsPreferences(selectedTraits);
+    });
+    
+    checkboxContainer.appendChild(checkbox);
+    checkboxContainer.appendChild(label);
+    gateTraitsCheckboxesContainer.appendChild(checkboxContainer);
+  });
+}
+
+// Get currently selected gate traits from checkboxes
+function getSelectedGateTraits() {
+  if (!gateTraitsCheckboxesContainer) return [];
+  
+  const checkboxes = gateTraitsCheckboxesContainer.querySelectorAll('input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// Initialize gate traits checkboxes on page load
+populateGateTraitsCheckboxes();
 
 if (rankAllMatingsBtn) {
   rankAllMatingsBtn.addEventListener('click', async () => {
@@ -323,8 +401,13 @@ if (rankAllMatingsBtn) {
 
     try {
       const topN = parseInt(topNSelect.value, 10) || 5;
+      
+      // Get selected gate traits from checkboxes
+      const gateTraits = getSelectedGateTraits();
+      
       const config = {
-        topN: topN
+        topN: topN,
+        gateTraits: gateTraits // Empty array if none selected
       };
       
       const result = await window.electronAPI.rankAllMatings(config);
@@ -1408,8 +1491,8 @@ function displayAllMatingsResults(data) {
       if (a.numBelowGrayAllTraits !== b.numBelowGrayAllTraits) {
         return a.numBelowGrayAllTraits - b.numBelowGrayAllTraits;
       }
-      // Finally by more improved weaknesses
-      return b.improvedWeaknessesCount - a.improvedWeaknessesCount;
+      // Finally by more improved emphasis traits
+      return b.improvedEmphasisTraitsCount - a.improvedEmphasisTraitsCount;
     });
   });
   
@@ -1442,12 +1525,16 @@ function displayAllMatingsResults(data) {
   summary.style.padding = '15px';
   summary.style.backgroundColor = '#f8f9fa';
   summary.style.borderRadius = '6px';
+  const gateTraitsDisplay = config.gateTraits && config.gateTraits.length > 0 
+    ? config.gateTraits.join(', ') 
+    : 'None (all matings pass gate)';
+    
   summary.innerHTML = `
     <h3>All Matings Ranking Results (Grouped by Cow)</h3>
     <p><strong>Total Matings Evaluated:</strong> ${totalMatings} (${totalCows} cows × ${totalSires} sires)</p>
     <p><strong>Results Shown:</strong> ${filteredMatings.length} of ${rankedMatings.length} ranked matings</p>
-    <p><strong>Gate Traits:</strong> ${config.gateTraits.join(', ')}</p>
-    <p><strong>Herd Weakness Traits:</strong> ${config.herdWeaknessTraits.join(', ')}</p>
+    <p><strong>Gate Traits:</strong> ${gateTraitsDisplay}</p>
+    <p><strong>Scoring:</strong> Emphasis-based weighting (all traits contribute)</p>
   `;
   container.appendChild(summary);
   
@@ -1608,7 +1695,7 @@ function displayAllMatingsResults(data) {
   headerRow.style.fontWeight = 'bold';
   
   // Base headers
-  const baseHeaders = ['Cow', 'Sire Rank', 'Score', 'Gate', 'Sire'];
+  const baseHeaders = ['Cow', 'Sire Rank', 'Score', 'Gate', 'Improved', 'Worsened', 'Sire'];
   
   // Add all trait headers
   const headers = [...baseHeaders, ...sortedTraits];
@@ -1681,6 +1768,26 @@ function displayAllMatingsResults(data) {
       gateCell.style.backgroundColor = mating.passedGate ? '#d4edda' : '#f8d7da';
       gateCell.style.color = mating.passedGate ? '#155724' : '#721c24';
       row.appendChild(gateCell);
+      
+      // Improved Traits
+      const improvedCell = document.createElement('td');
+      improvedCell.textContent = mating.improvedTraitsCount || 0;
+      improvedCell.style.padding = '8px';
+      improvedCell.style.border = '1px solid #000';
+      improvedCell.style.textAlign = 'center';
+      improvedCell.style.backgroundColor = '#d4edda';
+      improvedCell.style.color = '#155724';
+      row.appendChild(improvedCell);
+      
+      // Worsened Traits
+      const worsenedCell = document.createElement('td');
+      worsenedCell.textContent = mating.worsenedTraitsCount || 0;
+      worsenedCell.style.padding = '8px';
+      worsenedCell.style.border = '1px solid #000';
+      worsenedCell.style.textAlign = 'center';
+      worsenedCell.style.backgroundColor = '#f8d7da';
+      worsenedCell.style.color = '#721c24';
+      row.appendChild(worsenedCell);
       
       // Sire
       const sireCell = document.createElement('td');
@@ -2266,15 +2373,21 @@ async function compareSelectedAnimals() {
     alert('Please select at least one animal to compare.');
     return;
   }
-  
+
+  // Switch to Animal Entry tab to show results
+  const animalEntryTabButton = document.querySelector('.tab-button[data-tab="animal-entry"]');
+  if (animalEntryTabButton) {
+    animalEntryTabButton.click(); // This will trigger the tab switch logic
+  }
+
   const registrationNumbers = Array.from(selectedAnimals);
-  
+
   // Set the registration input and trigger processing
   registrationInput.value = registrationNumbers.join(', ');
-  
+
   // Scroll to top to show the results
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  
+
   // Trigger the scrape button
   scrapeBtn.click();
 }

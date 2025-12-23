@@ -195,11 +195,23 @@
                             <option value="10">10</option>
                         </select>
                     </div>
+                    <div style="flex: 1; min-width: 250px;">
+                        <label>Gate Traits (optional):</label>
+                        <div id="gate-traits-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-top: 5px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; max-height: 150px; overflow-y: auto; background-color: #fff;">
+                            <!-- Checkboxes will be populated dynamically -->
+                        </div>
+                        <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                            Select traits that must meet minimum standards. Leave all unchecked for no gates.
+                        </small>
+                    </div>
                     <div style="flex: 1; min-width: 150px;">
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <input type="checkbox" id="gate-filter-checkbox" checked style="width: auto; margin: 0;">
+                            <input type="checkbox" id="gate-filter-checkbox" style="width: auto; margin: 0;">
                             <span>Show only gate-pass</span>
                         </label>
+                        <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
+                            (Only applies if gate traits are selected)
+                        </small>
                     </div>
                 </div>
                 
