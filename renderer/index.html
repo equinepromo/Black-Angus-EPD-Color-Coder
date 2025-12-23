@@ -56,6 +56,13 @@
                 </div>
             </div>
 
+            <div class="input-group" style="margin-top: 15px;">
+                <label for="category-select">Category:</label>
+                <select id="category-select" class="cached-animals-dropdown" style="width: 200px;">
+                    <option value="My Herd" selected>My Herd</option>
+                </select>
+            </div>
+
             <div class="button-group">
                 <button id="scrape-btn" class="btn btn-primary">Process</button>
                 <button id="copy-table-btn" class="btn btn-secondary" disabled title="Copy table (colors may not work in Excel - use 'Export to Excel' for full formatting)">Copy Table</button>
@@ -180,8 +187,14 @@
                     <option value="cows">Cows Only</option>
                     <option value="sires">Sires Only</option>
                 </select>
+                <select id="category-filter" style="margin-left: 10px; padding: 8px;">
+                    <option value="all">All Categories</option>
+                </select>
                 <input type="text" id="inventory-search" placeholder="Search by name or registration number..." style="margin-left: 10px; padding: 8px; width: 300px;">
                 <button id="compare-selected-btn" class="btn btn-primary" style="margin-left: 10px;" disabled>Compare Selected (<span id="selected-count">0</span>)</button>
+                <button id="bulk-change-category-btn" class="btn btn-secondary" style="margin-left: 10px;" disabled>Change Category (<span id="selected-count-2">0</span>)</button>
+                <button id="manage-categories-btn" class="btn btn-secondary" style="margin-left: 10px;">Manage Categories</button>
+                <button id="delete-category-btn" class="btn btn-secondary" style="margin-left: 10px;">Delete Category Animals</button>
             </div>
 
             <div class="results-section" style="margin-top: 15px;">
@@ -204,6 +217,40 @@
             </div>
             <div id="modal-animal-details" style="margin-top: 20px;">
                 <!-- Animal details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Management Modal -->
+    <div id="category-management-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #ddd;">
+                <h2 style="margin: 0;">Manage Categories</h2>
+                <button id="close-category-modal-btn">✕ Close</button>
+            </div>
+            <div id="category-management-content" style="margin-top: 20px;">
+                <!-- Category list will be loaded here -->
+            </div>
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #ddd;">
+                <button id="add-category-btn" class="btn btn-primary">Add New Category</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Input Modal -->
+    <div id="category-input-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #ddd;">
+                <h2 style="margin: 0;">Add New Category</h2>
+                <button id="close-category-input-modal-btn">✕ Close</button>
+            </div>
+            <div style="margin-top: 20px;">
+                <label for="new-category-name" style="display: block; margin-bottom: 8px; font-weight: bold;">Category Name:</label>
+                <input type="text" id="new-category-name" placeholder="Enter category name..." style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+                <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px;">
+                    <button id="cancel-category-btn" class="btn btn-secondary">Cancel</button>
+                    <button id="save-category-btn" class="btn btn-primary">Add Category</button>
+                </div>
             </div>
         </div>
     </div>

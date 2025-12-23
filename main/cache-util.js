@@ -70,7 +70,7 @@ function getCacheFilePath(key) {
 }
 
 /**
- * Check if cached data exists and is still valid (less than 30 days old)
+ * Check if cached data exists and is still valid (less than 30 days old, or never expires for Researching)
  */
 function isCacheValid(cacheFilePath) {
   if (!fs.existsSync(cacheFilePath)) {
@@ -78,12 +78,37 @@ function isCacheValid(cacheFilePath) {
   }
 
   try {
+    // Read category from cache file to determine expiration policy
+    let category = 'My Herd'; // Default for backward compatibility (will migrate old 'Researching' defaults)
+    try {
+      const cacheContent = fs.readFileSync(cacheFilePath, 'utf8');
+      const cached = JSON.parse(cacheContent);
+      // For backward compatibility: if no category or old 'Researching', treat as 'My Herd' for expiration (30 days)
+      // Only actual 'Researching' category gets the no-expiry behavior
+      category = cached.category || 'My Herd';
+      if (category === 'Researching') {
+        // Keep Researching as-is for no-expiry behavior
+      } else if (!cached.category) {
+        // Old cache files without category default to My Herd (30-day expiry)
+        category = 'My Herd';
+      }
+    } catch (readError) {
+      // If we can't read the category, use default
+      console.log(`[CACHE] Could not read category from cache file, using default: ${cacheFilePath}`);
+      category = 'My Herd';
+    }
+    
     const stats = fs.statSync(cacheFilePath);
     const now = Date.now();
     const cacheAge = now - stats.mtimeMs;
     const cacheAgeDays = cacheAge / (1000 * 60 * 60 * 24);
     
-    return cacheAgeDays < CACHE_EXPIRY_DAYS;
+    // Apply expiration based on category
+    // Researching: Never expires automatically (365+ days)
+    // All other categories: 30-day expiration
+    const expiryDays = category === 'Researching' ? 365 : CACHE_EXPIRY_DAYS;
+    
+    return cacheAgeDays < expiryDays;
   } catch (error) {
     console.error('[CACHE] Error checking cache validity:', error);
     return false;
@@ -124,19 +149,21 @@ function loadCache(key) {
  * Save data to cache
  * @param {string} key - Cache key
  * @param {Object} data - Data to cache
+ * @param {string} category - Optional category (default: "My Herd")
  */
-function saveCache(key, data) {
+function saveCache(key, data, category = 'My Herd') {
   try {
     const cacheFilePath = getCacheFilePath(key);
     
     const cacheData = {
       key,
       cachedAt: new Date().toISOString(),
+      category: category || 'My Herd',
       data
     };
     
     fs.writeFileSync(cacheFilePath, JSON.stringify(cacheData, null, 2), 'utf8');
-    console.log(`[CACHE] Saved cache for key: ${key} to: ${cacheFilePath}`);
+    console.log(`[CACHE] Saved cache for key: ${key} with category: ${cacheData.category} to: ${cacheFilePath}`);
     
     // Verify the file was written
     if (fs.existsSync(cacheFilePath)) {
@@ -300,7 +327,8 @@ function getCachedAnimals() {
             registrationNumber: registrationNumber,
             animalName: animalName,
             sex: cached.data.sex || null,
-            cachedAt: cached.cachedAt || null
+            cachedAt: cached.cachedAt || null,
+            category: cached.category || 'My Herd' // Default for backward compatibility (old files without category)
           });
         }
       } catch (error) {
@@ -377,10 +405,236 @@ function getCachedAnimalsWithData() {
   }
 }
 
+/**
+ * Update category for an existing cached animal
+ * @param {string} registrationNumber - Registration number of the animal
+ * @param {string} category - New category name
+ * @returns {Object} Result object with success status
+ */
+function updateAnimalCategory(registrationNumber, category) {
+  try {
+    const cacheFilePath = getCacheFilePath(`epd_${registrationNumber}`);
+    
+    if (!fs.existsSync(cacheFilePath)) {
+      return { success: false, error: 'Cache file not found' };
+    }
+    
+    const cacheContent = fs.readFileSync(cacheFilePath, 'utf8');
+    const cached = JSON.parse(cacheContent);
+    
+    // Update category
+    cached.category = category;
+    
+    // Save updated cache
+    fs.writeFileSync(cacheFilePath, JSON.stringify(cached, null, 2), 'utf8');
+    console.log(`[CACHE] Updated category for ${registrationNumber} to: ${category}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`[CACHE] Error updating category for ${registrationNumber}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete all animals of a specific category
+ * @param {string} category - Category to delete animals from
+ * @returns {Object} Result object with success status and deleted count
+ */
+function deleteAnimalsByCategory(category) {
+  try {
+    const cacheDir = ensureCacheDir();
+    if (!fs.existsSync(cacheDir)) {
+      return { success: true, deletedCount: 0 };
+    }
+    
+    const files = fs.readdirSync(cacheDir);
+    const epdFiles = files.filter(f => f.startsWith('epd_') && f.endsWith('.json'));
+    let deletedCount = 0;
+    
+    epdFiles.forEach(file => {
+      try {
+        const filePath = path.join(cacheDir, file);
+        const cacheContent = fs.readFileSync(filePath, 'utf8');
+        const cached = JSON.parse(cacheContent);
+        
+        const animalCategory = cached.category || 'My Herd';
+        if (animalCategory === category) {
+          fs.unlinkSync(filePath);
+          deletedCount++;
+          console.log(`[CACHE] Deleted animal in category ${category}: ${file}`);
+        }
+      } catch (error) {
+        console.error(`[CACHE] Error processing file ${file}:`, error);
+      }
+    });
+    
+    console.log(`[CACHE] Deleted ${deletedCount} animals in category: ${category}`);
+    return { success: true, deletedCount };
+  } catch (error) {
+    console.error(`[CACHE] Error deleting animals by category ${category}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get animals by category
+ * @param {string} category - Category to filter by
+ * @returns {Array} Array of animal objects
+ */
+function getAnimalsByCategory(category) {
+  const allAnimals = getCachedAnimals();
+  return allAnimals.filter(animal => (animal.category || 'My Herd') === category);
+}
+
+/**
+ * Load categories from config file
+ * @returns {Array} Array of category names
+ */
+function loadCategories() {
+  try {
+    const categoriesPath = path.join(__dirname, '../config/categories.json');
+    
+    if (!fs.existsSync(categoriesPath)) {
+      // Initialize with default categories - only "My Herd" is predefined
+      const defaultCategories = ['My Herd'];
+      saveCategories(defaultCategories);
+      return defaultCategories;
+    }
+    
+    const categoriesData = fs.readFileSync(categoriesPath, 'utf8');
+    const parsed = JSON.parse(categoriesData);
+    // Return categories from file, or just "My Herd" if file is empty/invalid
+    return parsed.categories || ['My Herd'];
+  } catch (error) {
+    console.error('[CACHE] Error loading categories:', error);
+    // Return default categories on error - only "My Herd" is predefined
+    return ['My Herd'];
+  }
+}
+
+/**
+ * Save categories to config file
+ * @param {Array} categories - Array of category names
+ * @returns {Object} Result object with success status
+ */
+function saveCategories(categories) {
+  try {
+    const categoriesPath = path.join(__dirname, '../config/categories.json');
+    const categoriesDir = path.dirname(categoriesPath);
+    
+    // Ensure config directory exists
+    if (!fs.existsSync(categoriesDir)) {
+      fs.mkdirSync(categoriesDir, { recursive: true });
+    }
+    
+    const data = { categories: categories };
+    fs.writeFileSync(categoriesPath, JSON.stringify(data, null, 2), 'utf8');
+    console.log(`[CACHE] Saved ${categories.length} categories to: ${categoriesPath}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[CACHE] Error saving categories:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Add a new category
+ * @param {string} categoryName - Name of the category to add
+ * @returns {Object} Result object with success status
+ */
+function addCategory(categoryName) {
+  try {
+    const categories = loadCategories();
+    
+    // Validate category name
+    if (!categoryName || typeof categoryName !== 'string' || categoryName.trim().length === 0) {
+      return { success: false, error: 'Category name cannot be empty' };
+    }
+    
+    const trimmedName = categoryName.trim();
+    
+    // Check for duplicates (case-insensitive)
+    const lowerCaseCategories = categories.map(c => c.toLowerCase());
+    if (lowerCaseCategories.includes(trimmedName.toLowerCase())) {
+      return { success: false, error: 'Category already exists' };
+    }
+    
+    // Validate characters (alphanumeric, spaces, dashes, underscores)
+    if (!/^[a-zA-Z0-9\s\-_]+$/.test(trimmedName)) {
+      return { success: false, error: 'Category name contains invalid characters. Use only letters, numbers, spaces, dashes, and underscores.' };
+    }
+    
+    // Add category
+    categories.push(trimmedName);
+    const result = saveCategories(categories);
+    
+    if (result.success) {
+      console.log(`[CACHE] Added category: ${trimmedName}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[CACHE] Error adding category:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete a category
+ * @param {string} categoryName - Name of the category to delete
+ * @returns {Object} Result object with success status and animal count
+ */
+function deleteCategory(categoryName) {
+  try {
+    const predefinedCategories = ['My Herd'];
+    
+    // Cannot delete predefined categories
+    if (predefinedCategories.includes(categoryName)) {
+      return { success: false, error: 'Cannot delete predefined category' };
+    }
+    
+    // Check if any animals use this category
+    const animalsInCategory = getAnimalsByCategory(categoryName);
+    if (animalsInCategory.length > 0) {
+      return { 
+        success: false, 
+        error: `Cannot delete category with ${animalsInCategory.length} animals. Reassign them first.`,
+        animalCount: animalsInCategory.length
+      };
+    }
+    
+    // Remove category from list
+    const categories = loadCategories();
+    const filtered = categories.filter(c => c !== categoryName);
+    
+    if (filtered.length === categories.length) {
+      return { success: false, error: 'Category not found' };
+    }
+    
+    const result = saveCategories(filtered);
+    
+    if (result.success) {
+      console.log(`[CACHE] Deleted category: ${categoryName}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[CACHE] Error deleting category:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   loadCache,
   saveCache,
   deleteCachedAnimal,
+  updateAnimalCategory,
+  deleteAnimalsByCategory,
+  getAnimalsByCategory,
+  loadCategories,
+  saveCategories,
+  addCategory,
+  deleteCategory,
   clearAllCache,
   getCacheStats,
   getCachedAnimals,

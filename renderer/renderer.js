@@ -57,6 +57,7 @@ const damInput = document.getElementById('dam-input');
 const sireDropdown = document.getElementById('sire-dropdown');
 const damDropdown = document.getElementById('dam-dropdown');
 const calculateMatingBtn = document.getElementById('calculate-mating-btn');
+const categorySelect = document.getElementById('category-select');
 
 // Load color criteria on page load
 window.electronAPI.getColorCriteria().then(criteria => {
@@ -173,18 +174,21 @@ scrapeBtn.addEventListener('click', async () => {
   scrapedData = [];
   showProgress(0, registrationNumbers.length);
 
+  // Get selected category
+  const selectedCategory = categorySelect ? categorySelect.value : 'My Herd';
+
   try {
     let results;
     if (registrationNumbers.length === 1) {
       // Single scrape
-      const result = await window.electronAPI.scrapeEPD(registrationNumbers[0]);
+      const result = await window.electronAPI.scrapeEPD(registrationNumbers[0], selectedCategory);
       results = [{
         registrationNumber: registrationNumbers[0],
         ...result
       }];
     } else {
-      // Batch scrape
-      results = await window.electronAPI.scrapeBatch(registrationNumbers);
+      // Batch scrape - use selected category for all animals in batch
+      results = await window.electronAPI.scrapeBatch(registrationNumbers, selectedCategory);
     }
 
     scrapedData = results;
@@ -1783,13 +1787,73 @@ function showMatingDetail(mating) {
 // Herd Inventory Management
 const refreshInventoryBtn = document.getElementById('refresh-inventory-btn');
 const inventoryFilter = document.getElementById('inventory-filter');
+const categoryFilter = document.getElementById('category-filter');
 const inventorySearch = document.getElementById('inventory-search');
 const inventoryResultsContainer = document.getElementById('inventory-results-container');
 const compareSelectedBtn = document.getElementById('compare-selected-btn');
 const selectedCountSpan = document.getElementById('selected-count');
+const bulkChangeCategoryBtn = document.getElementById('bulk-change-category-btn');
+const manageCategoriesBtn = document.getElementById('manage-categories-btn');
+const deleteCategoryBtn = document.getElementById('delete-category-btn');
 
 let allInventoryAnimals = [];
 let selectedAnimals = new Set(); // Store registration numbers of selected animals
+let availableCategories = []; // Store available categories
+
+// Load categories from config
+async function loadCategoriesFromConfig() {
+  try {
+    availableCategories = await window.electronAPI.getAvailableCategories();
+    updateCategoryDropdowns();
+  } catch (error) {
+    console.error('Error loading categories:', error);
+    // Default to predefined category (only "My Herd" is predefined)
+    availableCategories = ['My Herd'];
+    updateCategoryDropdowns();
+  }
+}
+
+// Update category dropdowns throughout the UI
+function updateCategoryDropdowns() {
+  // Update main category selector
+  if (categorySelect) {
+    const currentValue = categorySelect.value;
+    categorySelect.innerHTML = '';
+    availableCategories.forEach(cat => {
+      const option = document.createElement('option');
+      option.value = cat;
+      option.textContent = cat;
+      categorySelect.appendChild(option);
+    });
+    // Restore previous selection if it still exists
+    if (availableCategories.includes(currentValue)) {
+      categorySelect.value = currentValue;
+    } else {
+      categorySelect.value = 'My Herd';
+    }
+  }
+  
+  // Update category filter in inventory
+  if (categoryFilter) {
+    const currentValue = categoryFilter.value;
+    categoryFilter.innerHTML = '<option value="all">All Categories</option>';
+    availableCategories.forEach(cat => {
+      const option = document.createElement('option');
+      option.value = cat;
+      option.textContent = cat;
+      categoryFilter.appendChild(option);
+    });
+    // Restore previous selection if it still exists
+    if (currentValue === 'all' || availableCategories.includes(currentValue)) {
+      categoryFilter.value = currentValue;
+    } else {
+      categoryFilter.value = 'all';
+    }
+  }
+}
+
+// Initialize categories on page load
+loadCategoriesFromConfig();
 
 // Load and display inventory
 async function loadInventory() {
@@ -1817,6 +1881,15 @@ function displayInventory() {
     filtered = filtered.filter(animal => {
       const sex = (animal.sex || '').toUpperCase();
       return sex === 'BULL' || sex === 'MALE' || sex === 'STEER' || sex.includes('BULL') || sex.includes('MALE');
+    });
+  }
+  
+  // Apply category filter
+  const categoryFilterValue = categoryFilter ? categoryFilter.value : 'all';
+  if (categoryFilterValue !== 'all') {
+    filtered = filtered.filter(animal => {
+      const animalCategory = animal.category || 'My Herd';
+      return animalCategory === categoryFilterValue;
     });
   }
   
@@ -1863,7 +1936,7 @@ function displayInventory() {
   headerRow.style.backgroundColor = '#E0E0E0';
   headerRow.style.fontWeight = 'bold';
   
-  const headers = ['Select', 'Name', 'Registration Number', 'Sex', 'Cached At', 'Actions'];
+  const headers = ['Select', 'Name', 'Registration Number', 'Sex', 'Category', 'Cached At', 'Actions'];
   headers.forEach((headerText, index) => {
     const th = document.createElement('th');
     if (headerText === 'Select') {
@@ -1961,6 +2034,26 @@ function displayInventory() {
     sexCell.style.border = '1px solid #000';
     row.appendChild(sexCell);
     
+    // Category
+    const categoryCell = document.createElement('td');
+    const animalCategory = animal.category || 'My Herd';
+    categoryCell.textContent = animalCategory;
+    categoryCell.style.padding = '8px';
+    categoryCell.style.border = '1px solid #000';
+    categoryCell.style.textAlign = 'center';
+    // Apply category badge styling - only "My Herd" gets special green color
+    if (animalCategory === 'My Herd') {
+      categoryCell.style.backgroundColor = '#d4edda';
+      categoryCell.style.color = '#155724';
+      categoryCell.style.fontWeight = 'bold';
+    } else {
+      // All other categories (including old "Researching" and "Watchlist" if they exist) - gray
+      categoryCell.style.backgroundColor = '#e9ecef';
+      categoryCell.style.color = '#495057';
+      categoryCell.style.fontWeight = 'bold';
+    }
+    row.appendChild(categoryCell);
+    
     // Cached At
     const cachedCell = document.createElement('td');
     if (animal.cachedAt) {
@@ -1989,6 +2082,125 @@ function displayInventory() {
       showAnimalDetailsModal(animal);
     });
     actionsCell.appendChild(viewBtn);
+    
+    // Change Category button
+    const changeCategoryBtn = document.createElement('button');
+    changeCategoryBtn.textContent = 'Change Category';
+    changeCategoryBtn.className = 'btn btn-secondary';
+    changeCategoryBtn.style.marginRight = '5px';
+    changeCategoryBtn.style.padding = '4px 8px';
+    changeCategoryBtn.style.fontSize = '0.9em';
+    changeCategoryBtn.addEventListener('click', async () => {
+      // Get current category
+      const currentCategory = animal.category || 'My Herd';
+      
+      // Create a simple selection dialog using select element
+      const categorySelect = document.createElement('select');
+      categorySelect.style.width = '100%';
+      categorySelect.style.padding = '8px';
+      categorySelect.style.marginBottom = '15px';
+      categorySelect.style.fontSize = '14px';
+      
+      availableCategories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        if (cat === currentCategory) {
+          option.selected = true;
+        }
+        categorySelect.appendChild(option);
+      });
+      
+      // Create modal-like dialog
+      const dialog = document.createElement('div');
+      dialog.style.position = 'fixed';
+      dialog.style.top = '0';
+      dialog.style.left = '0';
+      dialog.style.width = '100%';
+      dialog.style.height = '100%';
+      dialog.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+      dialog.style.display = 'flex';
+      dialog.style.justifyContent = 'center';
+      dialog.style.alignItems = 'center';
+      dialog.style.zIndex = '10000';
+      
+      const dialogContent = document.createElement('div');
+      dialogContent.style.backgroundColor = 'white';
+      dialogContent.style.padding = '20px';
+      dialogContent.style.borderRadius = '8px';
+      dialogContent.style.minWidth = '300px';
+      dialogContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+      
+      dialogContent.innerHTML = `
+        <h3 style="margin-top: 0;">Change Category</h3>
+        <p style="margin-bottom: 10px;">Animal: ${animal.animalName || animal.registrationNumber}</p>
+      `;
+      
+      dialogContent.appendChild(categorySelect);
+      
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.display = 'flex';
+      buttonContainer.style.justifyContent = 'flex-end';
+      buttonContainer.style.gap = '10px';
+      buttonContainer.style.marginTop = '15px';
+      
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.className = 'btn btn-secondary';
+      cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(dialog);
+      });
+      
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = 'Save';
+      saveBtn.className = 'btn btn-primary';
+      saveBtn.addEventListener('click', async () => {
+        const selectedCategory = categorySelect.value;
+        
+        if (availableCategories.includes(selectedCategory)) {
+          try {
+            const result = await window.electronAPI.updateAnimalCategory(animal.registrationNumber, selectedCategory);
+            if (result.success) {
+              // Update local data and refresh display
+              animal.category = selectedCategory;
+              displayInventory();
+              // Also refresh cached animals dropdowns
+              loadCachedAnimals();
+              document.body.removeChild(dialog);
+            } else {
+              alert('Error updating category: ' + (result.error || 'Unknown error'));
+            }
+          } catch (error) {
+            alert('Error updating category: ' + error.message);
+          }
+        } else {
+          alert('Invalid category selected');
+        }
+      });
+      
+      buttonContainer.appendChild(cancelBtn);
+      buttonContainer.appendChild(saveBtn);
+      dialogContent.appendChild(buttonContainer);
+      dialog.appendChild(dialogContent);
+      document.body.appendChild(dialog);
+      
+      // Close on click outside
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) {
+          document.body.removeChild(dialog);
+        }
+      });
+      
+      // Close on Escape key
+      const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+          document.body.removeChild(dialog);
+          document.removeEventListener('keydown', escapeHandler);
+        }
+      };
+      document.addEventListener('keydown', escapeHandler);
+    });
+    actionsCell.appendChild(changeCategoryBtn);
     
     // Delete button
     const deleteBtn = document.createElement('button');
@@ -2036,8 +2248,15 @@ function updateSelectedCount() {
   if (selectedCountSpan) {
     selectedCountSpan.textContent = count;
   }
+  const selectedCountSpan2 = document.getElementById('selected-count-2');
+  if (selectedCountSpan2) {
+    selectedCountSpan2.textContent = count;
+  }
   if (compareSelectedBtn) {
     compareSelectedBtn.disabled = count === 0;
+  }
+  if (bulkChangeCategoryBtn) {
+    bulkChangeCategoryBtn.disabled = count === 0;
   }
 }
 
@@ -2060,6 +2279,150 @@ async function compareSelectedAnimals() {
   scrapeBtn.click();
 }
 
+// Bulk change category for selected animals
+async function bulkChangeCategory() {
+  if (selectedAnimals.size === 0) {
+    alert('Please select at least one animal to change category.');
+    return;
+  }
+  
+  if (availableCategories.length === 0) {
+    alert('No categories available.');
+    return;
+  }
+  
+  // Create a simple selection dialog using select element
+  const categorySelect = document.createElement('select');
+  categorySelect.style.width = '100%';
+  categorySelect.style.padding = '8px';
+  categorySelect.style.marginBottom = '15px';
+  categorySelect.style.fontSize = '14px';
+  
+  availableCategories.forEach(cat => {
+    const option = document.createElement('option');
+    option.value = cat;
+    option.textContent = cat;
+    categorySelect.appendChild(option);
+  });
+  
+  // Create modal-like dialog
+  const dialog = document.createElement('div');
+  dialog.style.position = 'fixed';
+  dialog.style.top = '0';
+  dialog.style.left = '0';
+  dialog.style.width = '100%';
+  dialog.style.height = '100%';
+  dialog.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  dialog.style.display = 'flex';
+  dialog.style.justifyContent = 'center';
+  dialog.style.alignItems = 'center';
+  dialog.style.zIndex = '10000';
+  
+  const dialogContent = document.createElement('div');
+  dialogContent.style.backgroundColor = 'white';
+  dialogContent.style.padding = '20px';
+  dialogContent.style.borderRadius = '8px';
+  dialogContent.style.minWidth = '350px';
+  dialogContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+  
+  dialogContent.innerHTML = `
+    <h3 style="margin-top: 0;">Bulk Change Category</h3>
+    <p style="margin-bottom: 10px;">Change category for <strong>${selectedAnimals.size}</strong> selected animal(s):</p>
+  `;
+  
+  dialogContent.appendChild(categorySelect);
+  
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.display = 'flex';
+  buttonContainer.style.justifyContent = 'flex-end';
+  buttonContainer.style.gap = '10px';
+  buttonContainer.style.marginTop = '15px';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.addEventListener('click', () => {
+    document.body.removeChild(dialog);
+  });
+  
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Change Category';
+  saveBtn.className = 'btn btn-primary';
+  saveBtn.addEventListener('click', async () => {
+    const newCategory = categorySelect.value;
+    
+    if (availableCategories.includes(newCategory)) {
+      const registrationNumbers = Array.from(selectedAnimals);
+      let successCount = 0;
+      let errorCount = 0;
+      const errors = [];
+      
+      // Disable button during operation
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Updating...';
+      
+      // Update each animal's category
+      for (const regNum of registrationNumbers) {
+        try {
+          const result = await window.electronAPI.updateAnimalCategory(regNum, newCategory);
+          if (result.success) {
+            successCount++;
+            // Update local data
+            const animal = allInventoryAnimals.find(a => a.registrationNumber === regNum);
+            if (animal) {
+              animal.category = newCategory;
+            }
+          } else {
+            errorCount++;
+            errors.push(`${regNum}: ${result.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          errorCount++;
+          errors.push(`${regNum}: ${error.message}`);
+        }
+      }
+      
+      // Close dialog
+      document.body.removeChild(dialog);
+      
+      // Show results
+      if (errorCount === 0) {
+        alert(`Successfully changed category to "${newCategory}" for ${successCount} animal(s).`);
+      } else {
+        alert(`Updated ${successCount} animal(s). ${errorCount} error(s):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`);
+      }
+      
+      // Refresh display and clear selection
+      displayInventory();
+      loadCachedAnimals();
+    } else {
+      alert('Invalid category selected');
+    }
+  });
+  
+  buttonContainer.appendChild(cancelBtn);
+  buttonContainer.appendChild(saveBtn);
+  dialogContent.appendChild(buttonContainer);
+  dialog.appendChild(dialogContent);
+  document.body.appendChild(dialog);
+  
+  // Close on click outside
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) {
+      document.body.removeChild(dialog);
+    }
+  });
+  
+  // Close on Escape key
+  const escapeHandler = (e) => {
+    if (e.key === 'Escape') {
+      document.body.removeChild(dialog);
+      document.removeEventListener('keydown', escapeHandler);
+    }
+  };
+  document.addEventListener('keydown', escapeHandler);
+}
+
 // Event listeners
 if (refreshInventoryBtn) {
   refreshInventoryBtn.addEventListener('click', loadInventory);
@@ -2069,12 +2432,141 @@ if (inventoryFilter) {
   inventoryFilter.addEventListener('change', displayInventory);
 }
 
+if (categoryFilter) {
+  categoryFilter.addEventListener('change', displayInventory);
+}
+
 if (inventorySearch) {
   inventorySearch.addEventListener('input', displayInventory);
 }
 
 if (compareSelectedBtn) {
   compareSelectedBtn.addEventListener('click', compareSelectedAnimals);
+}
+
+if (bulkChangeCategoryBtn) {
+  bulkChangeCategoryBtn.addEventListener('click', bulkChangeCategory);
+}
+
+// Delete category animals button
+if (deleteCategoryBtn) {
+  deleteCategoryBtn.addEventListener('click', async () => {
+    if (availableCategories.length === 0) {
+      alert('No categories available.');
+      return;
+    }
+    
+    // Create a simple selection dialog using select element
+    const categorySelect = document.createElement('select');
+    categorySelect.style.width = '100%';
+    categorySelect.style.padding = '8px';
+    categorySelect.style.marginBottom = '15px';
+    categorySelect.style.fontSize = '14px';
+    
+    availableCategories.forEach(cat => {
+      const option = document.createElement('option');
+      option.value = cat;
+      option.textContent = cat;
+      categorySelect.appendChild(option);
+    });
+    
+    // Create modal-like dialog
+    const dialog = document.createElement('div');
+    dialog.style.position = 'fixed';
+    dialog.style.top = '0';
+    dialog.style.left = '0';
+    dialog.style.width = '100%';
+    dialog.style.height = '100%';
+    dialog.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    dialog.style.display = 'flex';
+    dialog.style.justifyContent = 'center';
+    dialog.style.alignItems = 'center';
+    dialog.style.zIndex = '10000';
+    
+    const dialogContent = document.createElement('div');
+    dialogContent.style.backgroundColor = 'white';
+    dialogContent.style.padding = '20px';
+    dialogContent.style.borderRadius = '8px';
+    dialogContent.style.minWidth = '300px';
+    dialogContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+    
+    dialogContent.innerHTML = `
+      <h3 style="margin-top: 0; color: #dc3545;">Delete Category Animals</h3>
+      <p style="margin-bottom: 10px;">Select a category to delete all animals from:</p>
+    `;
+    
+    dialogContent.appendChild(categorySelect);
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.display = 'flex';
+    buttonContainer.style.justifyContent = 'flex-end';
+    buttonContainer.style.gap = '10px';
+    buttonContainer.style.marginTop = '15px';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.addEventListener('click', () => {
+      document.body.removeChild(dialog);
+    });
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Delete Animals';
+    deleteBtn.className = 'btn btn-secondary';
+    deleteBtn.style.backgroundColor = '#dc3545';
+    deleteBtn.style.color = 'white';
+    deleteBtn.addEventListener('click', async () => {
+      const categoryToDelete = categorySelect.value;
+      
+      if (availableCategories.includes(categoryToDelete)) {
+        const confirmMessage = `Are you sure you want to delete ALL animals in the "${categoryToDelete}" category?\n\nThis action cannot be undone.`;
+        if (confirm(confirmMessage)) {
+          try {
+            const result = await window.electronAPI.deleteAnimalsByCategory(categoryToDelete);
+            if (result.success) {
+              alert(`Successfully deleted ${result.deletedCount} animals from category "${categoryToDelete}".`);
+              // Remove from selected animals
+              allInventoryAnimals = allInventoryAnimals.filter(a => (a.category || 'My Herd') !== categoryToDelete);
+              selectedAnimals.clear();
+              updateSelectedCount();
+              displayInventory();
+              // Also refresh cached animals dropdowns
+              loadCachedAnimals();
+              document.body.removeChild(dialog);
+            } else {
+              alert('Error deleting animals: ' + (result.error || 'Unknown error'));
+            }
+          } catch (error) {
+            alert('Error deleting animals: ' + error.message);
+          }
+        }
+      } else {
+        alert('Invalid category selected');
+      }
+    });
+    
+    buttonContainer.appendChild(cancelBtn);
+    buttonContainer.appendChild(deleteBtn);
+    dialogContent.appendChild(buttonContainer);
+    dialog.appendChild(dialogContent);
+    document.body.appendChild(dialog);
+    
+    // Close on click outside
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) {
+        document.body.removeChild(dialog);
+      }
+    });
+    
+    // Close on Escape key
+    const escapeHandler = (e) => {
+      if (e.key === 'Escape') {
+        document.body.removeChild(dialog);
+        document.removeEventListener('keydown', escapeHandler);
+      }
+    };
+    document.addEventListener('keydown', escapeHandler);
+  });
 }
 
 // Initialize selected count
@@ -2218,6 +2710,218 @@ async function showAnimalDetailsModal(animal) {
     console.error('Error loading animal details:', error);
     modalAnimalDetails.innerHTML = '<p style="color: #dc3545;">Error loading animal details: ' + error.message + '</p>';
   }
+}
+
+// Category Management Modal
+const categoryManagementModal = document.getElementById('category-management-modal');
+const closeCategoryModalBtn = document.getElementById('close-category-modal-btn');
+const categoryManagementContent = document.getElementById('category-management-content');
+const addCategoryBtn = document.getElementById('add-category-btn');
+
+// Category Input Modal
+const categoryInputModal = document.getElementById('category-input-modal');
+const closeCategoryInputModalBtn = document.getElementById('close-category-input-modal-btn');
+const newCategoryNameInput = document.getElementById('new-category-name');
+const saveCategoryBtn = document.getElementById('save-category-btn');
+const cancelCategoryBtn = document.getElementById('cancel-category-btn');
+
+// Close category input modal
+if (closeCategoryInputModalBtn) {
+  closeCategoryInputModalBtn.addEventListener('click', () => {
+    categoryInputModal.style.display = 'none';
+    if (newCategoryNameInput) newCategoryNameInput.value = '';
+  });
+}
+
+if (cancelCategoryBtn) {
+  cancelCategoryBtn.addEventListener('click', () => {
+    categoryInputModal.style.display = 'none';
+    if (newCategoryNameInput) newCategoryNameInput.value = '';
+  });
+}
+
+// Close category input modal when clicking outside
+if (categoryInputModal) {
+  categoryInputModal.addEventListener('click', (e) => {
+    if (e.target === categoryInputModal) {
+      categoryInputModal.style.display = 'none';
+      if (newCategoryNameInput) newCategoryNameInput.value = '';
+    }
+  });
+}
+
+// Close category input modal with Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && categoryInputModal && categoryInputModal.style.display === 'block') {
+    categoryInputModal.style.display = 'none';
+    if (newCategoryNameInput) newCategoryNameInput.value = '';
+  }
+});
+
+// Save category from input modal
+if (saveCategoryBtn && newCategoryNameInput) {
+  const saveCategory = async () => {
+    const categoryName = newCategoryNameInput.value.trim();
+    
+    if (!categoryName) {
+      alert('Please enter a category name');
+      return;
+    }
+    
+    try {
+      console.log('Adding category:', categoryName);
+      const result = await window.electronAPI.addCategory(categoryName);
+      console.log('Add category result:', result);
+      
+      if (result.success) {
+        // Close input modal and clear input
+        categoryInputModal.style.display = 'none';
+        newCategoryNameInput.value = '';
+        
+        // Refresh categories and modal
+        await loadCategoriesFromConfig();
+        showCategoryManagementModal();
+      } else {
+        alert('Error adding category: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error adding category:', error);
+      alert('Error adding category: ' + error.message);
+    }
+  };
+  
+  saveCategoryBtn.addEventListener('click', saveCategory);
+  
+  // Allow Enter key to submit
+  newCategoryNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveCategory();
+    }
+  });
+}
+
+// Show category input modal
+function showCategoryInputModal() {
+  if (categoryInputModal) {
+    categoryInputModal.style.display = 'block';
+    if (newCategoryNameInput) {
+      newCategoryNameInput.focus();
+      newCategoryNameInput.value = '';
+    }
+  }
+}
+
+// Close category modal
+if (closeCategoryModalBtn) {
+  closeCategoryModalBtn.addEventListener('click', () => {
+    categoryManagementModal.style.display = 'none';
+  });
+}
+
+// Close modal when clicking outside
+if (categoryManagementModal) {
+  categoryManagementModal.addEventListener('click', (e) => {
+    if (e.target === categoryManagementModal) {
+      categoryManagementModal.style.display = 'none';
+    }
+  });
+}
+
+// Close modal with Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && categoryManagementModal && categoryManagementModal.style.display === 'block') {
+    categoryManagementModal.style.display = 'none';
+  }
+});
+
+// Show category management modal
+async function showCategoryManagementModal() {
+  if (!categoryManagementModal || !categoryManagementContent) {
+    console.error('Category management modal elements not found');
+    return;
+  }
+  
+  // Load current categories
+  await loadCategoriesFromConfig();
+  
+  // Get all animals to count per category
+  const categoryCounts = {};
+  allInventoryAnimals.forEach(animal => {
+    const cat = animal.category || 'My Herd';
+    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+  });
+  
+  // Build modal content
+  let html = '<div style="margin-bottom: 20px;">';
+  html += '<table style="width: 100%; border-collapse: collapse;">';
+  html += '<thead><tr style="background-color: #E0E0E0; font-weight: bold;">';
+  html += '<th style="padding: 8px; border: 1px solid #000; text-align: left;">Category</th>';
+  html += '<th style="padding: 8px; border: 1px solid #000; text-align: center;">Animal Count</th>';
+  html += '<th style="padding: 8px; border: 1px solid #000; text-align: center;">Actions</th>';
+  html += '</tr></thead><tbody>';
+  
+  const predefinedCategories = ['My Herd'];
+  
+  availableCategories.forEach(category => {
+    const isPredefined = predefinedCategories.includes(category);
+    const count = categoryCounts[category] || 0;
+    // Badge colors - "My Herd" gets green, others get gray (custom colors removed)
+    const badgeColor = category === 'My Herd' ? '#d4edda' : '#e9ecef';
+    const textColor = category === 'My Herd' ? '#155724' : '#495057';
+    
+    html += '<tr>';
+    html += `<td style="padding: 8px; border: 1px solid #000; background-color: ${badgeColor}; color: ${textColor}; font-weight: bold;">${category}</td>`;
+    html += `<td style="padding: 8px; border: 1px solid #000; text-align: center;">${count}</td>`;
+    html += '<td style="padding: 8px; border: 1px solid #000; text-align: center;">';
+    
+    if (!isPredefined) {
+      html += `<button class="btn btn-secondary delete-category-btn" data-category="${category}" style="padding: 4px 8px; font-size: 0.9em; margin-right: 5px;">Delete</button>`;
+    } else {
+      html += '<span style="color: #999; font-style: italic;">Predefined</span>';
+    }
+    
+    html += '</td>';
+    html += '</tr>';
+  });
+  
+  html += '</tbody></table>';
+  html += '</div>';
+  
+  categoryManagementContent.innerHTML = html;
+  categoryManagementModal.style.display = 'block';
+  
+  // Add event listeners for delete buttons
+  document.querySelectorAll('.delete-category-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const categoryToDelete = btn.dataset.category;
+      
+      try {
+        const result = await window.electronAPI.deleteCategory(categoryToDelete);
+        if (result.success) {
+          // Refresh categories and modal
+          await loadCategoriesFromConfig();
+          showCategoryManagementModal();
+        } else {
+          alert('Error deleting category: ' + (result.error || 'Unknown error'));
+        }
+      } catch (error) {
+        alert('Error deleting category: ' + error.message);
+      }
+    });
+  });
+}
+
+// Add category button - show input modal
+if (addCategoryBtn) {
+  addCategoryBtn.addEventListener('click', () => {
+    showCategoryInputModal();
+  });
+}
+
+// Manage categories button
+if (manageCategoriesBtn) {
+  manageCategoriesBtn.addEventListener('click', showCategoryManagementModal);
 }
 
 // Load inventory on page load

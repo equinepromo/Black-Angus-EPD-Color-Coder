@@ -32,8 +32,9 @@ function getPuppeteerLaunchOptions() {
  * @param {string} registrationNumber - The registration number to scrape
  * @param {Browser} browser - Optional browser instance to reuse (for batch processing)
  * @param {boolean} forceRefresh - If true, bypass cache and fetch fresh data
+ * @param {string} category - Optional category for caching (default: "My Herd")
  */
-async function scrapeEPD(registrationNumber, browser = null, forceRefresh = false) {
+async function scrapeEPD(registrationNumber, browser = null, forceRefresh = false, category = 'My Herd') {
   console.log('\n[SCRAPER] ===========================================');
   console.log('[SCRAPER] scrapeEPD called with registration number:', registrationNumber);
   console.log('[SCRAPER] Force refresh:', forceRefresh);
@@ -114,7 +115,7 @@ async function scrapeEPD(registrationNumber, browser = null, forceRefresh = fals
       const data = await extractData(page, registrationNumber);
       // Save to cache
       const cacheKey = `epd_${registrationNumber}`;
-      cacheUtil.saveCache(cacheKey, data);
+      cacheUtil.saveCache(cacheKey, data, category);
       await page.close();
       if (shouldCloseBrowser) await browser.close();
       // Return data with flag indicating it was freshly scraped
@@ -289,7 +290,7 @@ async function scrapeEPD(registrationNumber, browser = null, forceRefresh = fals
     
     // Save to cache
     const cacheKey = `epd_${registrationNumber}`;
-    cacheUtil.saveCache(cacheKey, data);
+    cacheUtil.saveCache(cacheKey, data, category);
     
     // Close page but keep browser for reuse
     await page.close();
@@ -315,7 +316,7 @@ async function scrapeEPD(registrationNumber, browser = null, forceRefresh = fals
             const data = await extractData(currentPage, registrationNumber);
             // Save to cache
             const cacheKey = `epd_${registrationNumber}`;
-            cacheUtil.saveCache(cacheKey, data);
+            cacheUtil.saveCache(cacheKey, data, category);
             await currentPage.close();
             if (shouldCloseBrowser) await browser.close();
             // Return data with flag indicating it was freshly scraped

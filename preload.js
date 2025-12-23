@@ -1,8 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  scrapeEPD: (registrationNumber) => ipcRenderer.invoke('scrape-epd', registrationNumber),
-  scrapeBatch: (registrationNumbers) => ipcRenderer.invoke('scrape-batch', registrationNumbers),
+  scrapeEPD: (registrationNumber, category) => ipcRenderer.invoke('scrape-epd', registrationNumber, category),
+  scrapeBatch: (registrationNumbers, category) => ipcRenderer.invoke('scrape-batch', registrationNumbers, category),
   onScrapeProgress: (callback) => {
     ipcRenderer.on('scrape-progress', (event, data) => callback(data));
   },
@@ -20,6 +20,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deactivateLicense: () => ipcRenderer.invoke('deactivate-license'),
   getCachedAnimals: () => ipcRenderer.invoke('get-cached-animals'),
   deleteCachedAnimal: (registrationNumber) => ipcRenderer.invoke('delete-cached-animal', registrationNumber),
+  updateAnimalCategory: (registrationNumber, category) => ipcRenderer.invoke('update-animal-category', registrationNumber, category),
+  deleteAnimalsByCategory: (category) => ipcRenderer.invoke('delete-animals-by-category', category),
+  getAvailableCategories: () => ipcRenderer.invoke('get-available-categories'),
+  loadCategories: () => ipcRenderer.invoke('load-categories'),
+  saveCategories: (categories) => ipcRenderer.invoke('save-categories', categories),
+  addCategory: (categoryName) => ipcRenderer.invoke('add-category', categoryName),
+  deleteCategory: (categoryName) => ipcRenderer.invoke('delete-category', categoryName),
   getPercentileData: (animalType) => ipcRenderer.invoke('get-percentile-data', animalType),
   // Update APIs
   checkForUpdates: (showDialog) => ipcRenderer.invoke('check-for-updates', showDialog),

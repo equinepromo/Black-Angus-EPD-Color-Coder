@@ -326,6 +326,48 @@ ipcMain.handle('delete-cached-animal', async (event, registrationNumber) => {
   return cacheUtil.deleteCachedAnimal(registrationNumber);
 });
 
+// Update animal category
+ipcMain.handle('update-animal-category', async (event, registrationNumber, category) => {
+  console.log('[MAIN] update-animal-category called for:', registrationNumber, 'to category:', category);
+  return cacheUtil.updateAnimalCategory(registrationNumber, category);
+});
+
+// Delete animals by category
+ipcMain.handle('delete-animals-by-category', async (event, category) => {
+  console.log('[MAIN] delete-animals-by-category called for:', category);
+  return cacheUtil.deleteAnimalsByCategory(category);
+});
+
+// Get available categories
+ipcMain.handle('get-available-categories', async (event) => {
+  console.log('[MAIN] get-available-categories called');
+  return cacheUtil.loadCategories();
+});
+
+// Load categories
+ipcMain.handle('load-categories', async (event) => {
+  console.log('[MAIN] load-categories called');
+  return cacheUtil.loadCategories();
+});
+
+// Save categories
+ipcMain.handle('save-categories', async (event, categories) => {
+  console.log('[MAIN] save-categories called with:', categories.length, 'categories');
+  return cacheUtil.saveCategories(categories);
+});
+
+// Add category
+ipcMain.handle('add-category', async (event, categoryName) => {
+  console.log('[MAIN] add-category called for:', categoryName);
+  return cacheUtil.addCategory(categoryName);
+});
+
+// Delete category
+ipcMain.handle('delete-category', async (event, categoryName) => {
+  console.log('[MAIN] delete-category called for:', categoryName);
+  return cacheUtil.deleteCategory(categoryName);
+});
+
 ipcMain.handle('validate-license', async (event) => {
   return await licenseManager.validateLicense(true);
 });
@@ -368,16 +410,16 @@ ipcMain.handle('test-scrape', async (event, registrationNumber) => {
   }
 });
 
-ipcMain.handle('scrape-epd', async (event, registrationNumber) => {
+ipcMain.handle('scrape-epd', async (event, registrationNumber, category) => {
   // Check license before allowing operation
   const licenseStatus = await licenseManager.validateLicense();
   if (!licenseStatus.valid) {
     return { success: false, error: 'License invalid. Please activate the application.' };
   }
 
-  console.log('[MAIN] scrape-epd IPC handler called with:', registrationNumber);
+  console.log('[MAIN] scrape-epd IPC handler called with:', registrationNumber, 'category:', category || 'My Herd');
   try {
-    const result = await scraper.scrapeEPD(registrationNumber);
+    const result = await scraper.scrapeEPD(registrationNumber, null, false, category || 'My Herd');
     console.log('[MAIN] Scrape completed successfully');
     return { success: true, data: result };
   } catch (error) {
@@ -387,7 +429,7 @@ ipcMain.handle('scrape-epd', async (event, registrationNumber) => {
   }
 });
 
-ipcMain.handle('scrape-batch', async (event, registrationNumbers) => {
+ipcMain.handle('scrape-batch', async (event, registrationNumbers, category) => {
   // Check license before allowing operation
   const licenseStatus = await licenseManager.validateLicense();
   if (!licenseStatus.valid) {
@@ -397,6 +439,10 @@ ipcMain.handle('scrape-batch', async (event, registrationNumbers) => {
   const results = [];
   const puppeteer = require('puppeteer');
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  
+  // Use selected category or default to 'My Herd'
+  const selectedCategory = category || 'My Herd';
+  console.log('[MAIN] scrape-batch called with category:', selectedCategory);
   
   // Reuse browser instance for all scrapes (major performance improvement)
   let browser = null;
@@ -412,8 +458,8 @@ ipcMain.handle('scrape-batch', async (event, registrationNumbers) => {
     for (let i = 0; i < registrationNumbers.length; i++) {
       const regNum = registrationNumbers[i];
       try {
-        // Pass browser instance to reuse it
-        const result = await scraper.scrapeEPD(regNum, browser);
+        // Pass browser instance to reuse it, and pass category
+        const result = await scraper.scrapeEPD(regNum, browser, false, selectedCategory);
         results.push({ registrationNumber: regNum, success: true, data: result });
         
         // Reduced rate limiting: wait 0.5-1 second between requests (was 2-3 seconds)

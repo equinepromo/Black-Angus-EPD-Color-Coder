@@ -560,6 +560,57 @@ table td {
     border-color: #bd2130;
 }
 
+/* Category Badge Styling */
+.category-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.category-badge-my-herd {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.category-badge-researching {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.category-badge-watchlist {
+    background-color: #cfe2ff;
+    color: #084298;
+}
+
+.category-badge-custom {
+    background-color: #e9ecef;
+    color: #495057;
+}
+
+#close-category-modal-btn {
+    font-size: 18px;
+    font-weight: bold;
+    padding: 10px 20px;
+    cursor: pointer;
+    border: 2px solid #dc3545;
+    background-color: #dc3545;
+    color: white;
+    border-radius: 6px;
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+#close-category-modal-btn:hover {
+    background-color: #c82333;
+    border-color: #c82333;
+}
+
+#close-category-modal-btn:active {
+    background-color: #bd2130;
+    border-color: #bd2130;
+}
+
 /* Update Notification Styles */
 .update-notification {
     background: linear-gradient(135deg, #006400 0%, #32CD32 100%);
