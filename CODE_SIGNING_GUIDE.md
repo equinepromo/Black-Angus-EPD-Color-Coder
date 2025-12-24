@@ -240,3 +240,4 @@ Once signed and notarized:
 - [electron-builder Code Signing](https://www.electron.build/code-signing)
 - [Notarization Documentation](https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution)
 
+

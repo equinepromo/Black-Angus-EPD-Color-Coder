@@ -185,3 +185,4 @@ xattr -d com.apple.quarantine ~/Downloads/Black-Angus-EPD-Color-Coder-1.0.1.dmg
 - Check that the release tag matches the version in `package.json`
 - Verify the repository name in `package.json` matches your GitHub repo
 
+

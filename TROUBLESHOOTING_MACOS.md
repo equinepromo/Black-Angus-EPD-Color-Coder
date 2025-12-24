@@ -138,3 +138,4 @@ codesign -dv --verbose=4 "/Applications/Black Angus EPD Color Coder.app"
 spctl --status
 ```
 
+
