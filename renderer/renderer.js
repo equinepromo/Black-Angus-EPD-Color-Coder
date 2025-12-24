@@ -405,9 +405,17 @@ if (rankAllMatingsBtn) {
       // Get selected gate traits from checkboxes
       const gateTraits = getSelectedGateTraits();
       
+      // Get selected categories (default to "all" if not set)
+      const sireCategorySelect = document.getElementById('sire-category-select');
+      const cowCategorySelect = document.getElementById('cow-category-select');
+      const sireCategory = sireCategorySelect ? sireCategorySelect.value : 'all';
+      const cowCategory = cowCategorySelect ? cowCategorySelect.value : 'all';
+      
       const config = {
         topN: topN,
-        gateTraits: gateTraits // Empty array if none selected
+        gateTraits: gateTraits, // Empty array if none selected
+        sireCategory: sireCategory === 'all' ? null : sireCategory,
+        cowCategory: cowCategory === 'all' ? null : cowCategory
       };
       
       const result = await window.electronAPI.rankAllMatings(config);
@@ -541,6 +549,48 @@ function getColorForTrait(traitName, percentRank, epdValue = null, percentileDat
   return { bgColor: '#808080', textColor: '#000000' };
 }
 
+/**
+ * Scores a single animal using the shared scoring function from mating-ranker
+ * @param {Object} animalData - Animal data object with epdValues
+ * @param {string} animalType - 'bull' or 'cow'
+ * @param {Array} gateTraits - Array of gate trait names (optional, defaults to empty)
+ * @returns {Promise<number>} Final score
+ */
+async function scoreAnimal(animalData, animalType, gateTraits = []) {
+  if (!animalData || !animalData.epdValues) {
+    return 0;
+  }
+  
+  // Extract EPD values from animal data
+  const epdValues = {};
+  for (const trait in animalData.epdValues) {
+    const traitData = animalData.epdValues[trait];
+    if (!traitData || !traitData.epd) {
+      continue;
+    }
+    
+    // Parse EPD value
+    let epdStr = traitData.epd;
+    if (typeof epdStr === 'string') {
+      epdStr = epdStr.replace(/^I\s*/i, '').trim(); // Remove "I" prefix if present
+    }
+    const epdValue = parseFloat(epdStr);
+    
+    if (!isNaN(epdValue)) {
+      epdValues[trait] = epdValue;
+    }
+  }
+  
+  // Call shared scoring function via IPC
+  try {
+    const result = await window.electronAPI.scoreAnimal(epdValues, animalType, gateTraits);
+    return result.success ? result.score : 0;
+  } catch (error) {
+    console.error('Error scoring animal:', error);
+    return 0;
+  }
+}
+
 async function displayResults(results) {
   mainResultsContainer.innerHTML = '';
 
@@ -608,6 +658,18 @@ async function displayResults(results) {
     return;
   }
 
+  // Get selected gate traits (if any) for scoring
+  const gateTraits = getSelectedGateTraits();
+
+  // Calculate scores for each animal (using shared scoring function)
+  await Promise.all(validResults.map(async (result) => {
+    const sex = (result.data.sex || '').toUpperCase();
+    const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+    const animalType = isCow ? 'cow' : 'bull';
+    
+    result.score = await scoreAnimal(result.data, animalType, gateTraits);
+  }));
+
   // Get all unique traits
   const allTraits = new Set();
   validResults.forEach(result => {
@@ -653,7 +715,7 @@ async function displayResults(results) {
 
   // Define additional info columns (Name first, then Registration Number, then others)
   const additionalInfoColumns = ['Sire', 'Dam', 'MGS', 'BD', 'Tattoo'];
-  const headers = ['Name', 'Registration Number', ...additionalInfoColumns, ...sortedTraits];
+  const headers = ['Name', 'Registration Number', 'Score', ...additionalInfoColumns, ...sortedTraits];
   
   // Load saved column visibility preferences
   const savedPreferences = loadColumnVisibilityPreferences();
@@ -732,6 +794,20 @@ async function displayResults(results) {
     const regNumVal = parseFloat(regNumText);
     regNumCell.dataset.sortValue = !isNaN(regNumVal) ? regNumVal.toString() : '';
     row.appendChild(regNumCell);
+
+    // Score column
+    const scoreCell = document.createElement('td');
+    const score = result.score !== undefined ? result.score : 0;
+    scoreCell.textContent = score.toFixed(2);
+    scoreCell.style.padding = '8px';
+    scoreCell.style.border = '1px solid #000';
+    scoreCell.style.textAlign = 'center';
+    scoreCell.style.backgroundColor = '#FFFFFF';
+    scoreCell.style.color = '#000000';
+    scoreCell.setAttribute('bgcolor', '#FFFFFF');
+    scoreCell.dataset.columnName = 'Score';
+    scoreCell.dataset.sortValue = score.toString();
+    row.appendChild(scoreCell);
 
     // Additional info columns
     const additionalInfoMap = {
@@ -1003,7 +1079,8 @@ async function displayResults(results) {
   mainResultsContainer.appendChild(tableWrapper);
   
   // Add sorting functionality
-  let currentSort = { column: null, direction: 'asc' };
+  // Default sort: Score descending (highest to lowest)
+  let currentSort = { column: 'Score', direction: 'desc' };
   
   function sortTable(columnName, direction) {
     const rows = Array.from(tbody.querySelectorAll('tr'));
@@ -1123,6 +1200,9 @@ async function displayResults(results) {
       sortTable(columnName, currentSort.direction);
     });
   });
+
+  // Apply default sort (after sortTable is defined)
+  sortTable('Score', 'desc');
 
   // Show errors if any
   const errorResults = results.filter(r => !r.success);
@@ -1607,23 +1687,88 @@ function displayAllMatingsResults(data) {
     return a.localeCompare(b);
   });
   
-  // Summary header
+  // Summary header with export button
   const summary = document.createElement('div');
   summary.style.marginBottom = '20px';
   summary.style.padding = '15px';
   summary.style.backgroundColor = '#f8f9fa';
   summary.style.borderRadius = '6px';
+  summary.style.display = 'flex';
+  summary.style.justifyContent = 'space-between';
+  summary.style.alignItems = 'flex-start';
+  summary.style.flexWrap = 'wrap';
+  summary.style.gap = '15px';
+  
+  const summaryText = document.createElement('div');
+  summaryText.style.flex = '1';
   const gateTraitsDisplay = config.gateTraits && config.gateTraits.length > 0 
     ? config.gateTraits.join(', ') 
     : 'None (all matings pass gate)';
-    
-  summary.innerHTML = `
-    <h3>All Matings Ranking Results (Grouped by Cow)</h3>
+  
+  summaryText.innerHTML = `
+    <h3 style="margin-top: 0;">All Matings Ranking Results (Grouped by Cow)</h3>
     <p><strong>Total Matings Evaluated:</strong> ${totalMatings} (${totalCows} cows × ${totalSires} sires)</p>
     <p><strong>Results Shown:</strong> ${filteredMatings.length} of ${rankedMatings.length} ranked matings</p>
     <p><strong>Gate Traits:</strong> ${gateTraitsDisplay}</p>
     <p><strong>Scoring:</strong> Emphasis-based weighting (all traits contribute)</p>
   `;
+  
+  // Export button
+  const exportBtn = document.createElement('button');
+  exportBtn.className = 'btn btn-primary';
+  exportBtn.textContent = 'Export to Excel';
+  exportBtn.style.alignSelf = 'flex-start';
+  exportBtn.addEventListener('click', async () => {
+    exportBtn.disabled = true;
+    const originalText = exportBtn.textContent;
+    exportBtn.textContent = 'Exporting...';
+    
+    try {
+      // Convert matings data to format expected by Excel export
+      // Include score and gate status in the export
+      const exportData = filteredMatings.map(mating => ({
+        success: true,
+        registrationNumber: `${mating.cowId} × ${mating.sireId}`,
+        data: {
+          animalName: `${mating.cowName} × ${mating.sireName}`,
+          epdValues: Object.keys(mating.traitResults || {}).reduce((acc, trait) => {
+            const result = mating.traitResults[trait];
+            acc[trait] = {
+              epd: result.calfEpd?.toFixed(2) || 'N/A',
+              percentRank: result.calfPercentile || 'N/A'
+            };
+            return acc;
+          }, {}),
+          additionalInfo: {
+            sire: mating.sireName || mating.sireId,
+            dam: mating.cowName || mating.cowId,
+            score: mating.score?.toFixed(2) || '0.00',
+            passedGate: mating.passedGate ? 'Yes' : 'No',
+            numBelowLightGreen: mating.numBelowLightGreenAllTraits || 0,
+            improvedEmphasisTraits: mating.improvedEmphasisTraitsCount || 0
+          }
+        }
+      }));
+      
+      const result = await window.electronAPI.exportToExcel(exportData);
+      
+      if (result && result.success) {
+        alert(`Excel file saved successfully!\n${result.path}`);
+      } else {
+        const errorMsg = result?.error || 'Unknown error';
+        alert(`Export failed: ${errorMsg}`);
+      }
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Error exporting to Excel: ' + (error.message || String(error)));
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = originalText;
+    }
+  });
+  
+  summary.appendChild(summaryText);
+  summary.appendChild(exportBtn);
   container.appendChild(summary);
   
   // Calculate sire summary (how many times each bull was ranked #1, #2, etc. per cow)
@@ -2043,6 +2188,44 @@ function updateCategoryDropdowns() {
       categoryFilter.value = currentValue;
     } else {
       categoryFilter.value = 'all';
+    }
+  }
+  
+  // Update sire category selector for All Matings
+  const sireCategorySelect = document.getElementById('sire-category-select');
+  if (sireCategorySelect) {
+    const currentValue = sireCategorySelect.value;
+    sireCategorySelect.innerHTML = '<option value="all">All</option>';
+    availableCategories.forEach(cat => {
+      const option = document.createElement('option');
+      option.value = cat;
+      option.textContent = cat;
+      sireCategorySelect.appendChild(option);
+    });
+    // Restore previous selection if it still exists
+    if (currentValue === 'all' || availableCategories.includes(currentValue)) {
+      sireCategorySelect.value = currentValue;
+    } else {
+      sireCategorySelect.value = 'all';
+    }
+  }
+  
+  // Update cow category selector for All Matings
+  const cowCategorySelect = document.getElementById('cow-category-select');
+  if (cowCategorySelect) {
+    const currentValue = cowCategorySelect.value;
+    cowCategorySelect.innerHTML = '<option value="all">All</option>';
+    availableCategories.forEach(cat => {
+      const option = document.createElement('option');
+      option.value = cat;
+      option.textContent = cat;
+      cowCategorySelect.appendChild(option);
+    });
+    // Restore previous selection if it still exists
+    if (currentValue === 'all' || availableCategories.includes(currentValue)) {
+      cowCategorySelect.value = currentValue;
+    } else {
+      cowCategorySelect.value = 'all';
     }
   }
 }

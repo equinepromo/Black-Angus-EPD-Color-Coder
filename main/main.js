@@ -668,15 +668,37 @@ ipcMain.handle('rank-all-matings', async (event, config) => {
     
     emitProgress(2, 6, 'Filtering cows and sires...');
     
-    // Filter into cows and sires
+    // Get category filters from config (null means "all")
+    const sireCategory = config?.sireCategory || null;
+    const cowCategory = config?.cowCategory || null;
+    
+    // Filter into cows and sires, with category filtering
     const cows = allAnimals.filter(animal => {
+      // First filter by sex
       const sex = (animal.sex || '').toUpperCase();
-      return sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+      const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+      if (!isCow) return false;
+      
+      // Then filter by category if specified
+      if (cowCategory !== null) {
+        const animalCategory = animal.category || 'My Herd';
+        return animalCategory === cowCategory;
+      }
+      return true; // "all" means no category filter
     });
     
     const sires = allAnimals.filter(animal => {
+      // First filter by sex
       const sex = (animal.sex || '').toUpperCase();
-      return sex === 'BULL' || sex === 'MALE' || sex === 'STEER' || sex.includes('BULL') || sex.includes('MALE');
+      const isSire = sex === 'BULL' || sex === 'MALE' || sex === 'STEER' || sex.includes('BULL') || sex.includes('MALE');
+      if (!isSire) return false;
+      
+      // Then filter by category if specified
+      if (sireCategory !== null) {
+        const animalCategory = animal.category || 'My Herd';
+        return animalCategory === sireCategory;
+      }
+      return true; // "all" means no category filter
     });
     
     if (cows.length === 0) {
@@ -687,7 +709,11 @@ ipcMain.handle('rank-all-matings', async (event, config) => {
       return { success: false, error: 'No sires found in cache. Please scrape some sires first.' };
     }
     
-    console.log(`[MAIN] Found ${cows.length} cows and ${sires.length} sires (${cows.length * sires.length} total matings)`);
+    const categoryInfo = [];
+    if (sireCategory) categoryInfo.push(`sires: ${sireCategory}`);
+    if (cowCategory) categoryInfo.push(`cows: ${cowCategory}`);
+    const categoryStr = categoryInfo.length > 0 ? ` (filtered by ${categoryInfo.join(', ')})` : ' (all categories)';
+    console.log(`[MAIN] Found ${cows.length} cows and ${sires.length} sires${categoryStr} (${cows.length * sires.length} total matings)`);
     
     emitProgress(3, 6, 'Fetching percentile data...');
     
@@ -821,6 +847,32 @@ ipcMain.handle('get-percentile-data', async (event, animalType) => {
   } catch (error) {
     console.error('[MAIN] Error fetching percentile data:', error);
     return null;
+  }
+});
+
+// Score an animal using EPD values
+ipcMain.handle('score-animal', async (event, { epdValues, animalType, gateTraits = [] }) => {
+  try {
+    // Get percentile data
+    let percentileData = null;
+    if (animalType === 'cow') {
+      percentileData = await percentileLookup.fetchCowPercentileBreakdowns();
+    } else {
+      percentileData = await percentileLookup.fetchPercentileBreakdowns();
+    }
+    
+    // Get color criteria
+    const criteriaPath = path.join(__dirname, '../config/color-criteria.json');
+    const criteriaData = fs.readFileSync(criteriaPath, 'utf8');
+    const colorCriteria = JSON.parse(criteriaData);
+    
+    // Score using shared function
+    const score = matingRanker.scoreEpdValues(epdValues, percentileData, colorCriteria, gateTraits);
+    
+    return { success: true, score: score };
+  } catch (error) {
+    console.error('[MAIN] Error scoring animal:', error);
+    return { success: false, error: error.message, score: 0 };
   }
 });
 

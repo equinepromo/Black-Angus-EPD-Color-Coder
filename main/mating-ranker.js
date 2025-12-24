@@ -230,6 +230,79 @@ function colorFromPercentile(trait, percentile, colorCriteria) {
 }
 
 /**
+ * Core scoring function - scores EPD values using the same formula
+ * This is the shared logic used by both mating evaluation and single animal scoring
+ * @param {Object} epdValues - Object mapping trait names to EPD values: { "WW": 45.5, "YW": 80.2, ... }
+ * @param {Object} percentileData - Percentile breakdown data
+ * @param {Object} colorCriteria - Color criteria from config
+ * @param {Array} gateTraits - Array of gate trait names (optional, defaults to empty)
+ * @returns {number} Final score
+ */
+function scoreEpdValues(epdValues, percentileData, colorCriteria, gateTraits = []) {
+  if (!epdValues || typeof epdValues !== 'object') {
+    return 0;
+  }
+  
+  let baseScore = 0;
+  let belowLightGreenPenalty = 0;
+  let extraGatePenalty = 0;
+  
+  const traits = Object.keys(epdValues);
+  
+  for (const trait of traits) {
+    const epdValue = epdValues[trait];
+    
+    // Skip if EPD value is missing or invalid
+    if (epdValue === null || epdValue === undefined || isNaN(epdValue)) {
+      continue;
+    }
+    
+    // Get percentile
+    const percentile = percentileFromEpd(trait, epdValue, percentileData);
+    
+    // Get color
+    const colors = percentile !== null 
+      ? colorFromPercentile(trait, percentile, colorCriteria)
+      : { bgColor: '#808080', textColor: '#000000' };
+    
+    // Get band
+    const band = bandFromBgColor(colors.bgColor);
+    
+    // Get normalized weight based on emphasis
+    const weight = getTraitWeight(trait);
+    
+    // Get color goodness
+    const goodness = getColorGoodness(band);
+    
+    // Add to base score (all traits contribute)
+    baseScore += weight * goodness;
+    
+    // Check if worse than light green (baseline for penalties)
+    if (isWorseThanLightGreen(band)) {
+      const colorRank = getColorRank(band);
+      const lightGreenRank = getColorRank(BANDS.LIGHT_GREEN);
+      const rankDiff = colorRank - lightGreenRank;
+      
+      // Below light green penalty (applied to all traits worse than Light Green: Gray, Pink, Red, Dark Red)
+      belowLightGreenPenalty += rankDiff * 0.25 * weight;
+      
+      // Extra gate penalty if this is a gate trait AND worse than Gray (Pink, Red, Dark Red)
+      // Note: Gray passes gates but still gets the below-light-green penalty above
+      if (gateTraits.length > 0 && gateTraits.includes(trait) && isWorseThanGray(band)) {
+        const grayRank = getColorRank(BANDS.GRAY);
+        const gateRankDiff = colorRank - grayRank;
+        extraGatePenalty += gateRankDiff * 0.60 * weight;
+      }
+    }
+  }
+  
+  // Calculate final score
+  const finalScore = baseScore - belowLightGreenPenalty - extraGatePenalty;
+  
+  return finalScore;
+}
+
+/**
  * Evaluates a single mating and computes score
  * @param {Object} cow - Cow data object with epdValues
  * @param {Object} sire - Sire data object with epdValues
@@ -245,14 +318,14 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
   } = config;
   
   const traitResults = {};
-  let baseScore = 0;
-  let belowLightGreenPenalty = 0;
-  let extraGatePenalty = 0;
   let numBelowLightGreenAllTraits = 0;
   let improvedEmphasisTraitsCount = 0;
   let improvedTraitsCount = 0; // Traits improved from cow EPD
   let worsenedTraitsCount = 0; // Traits worsened from cow EPD
   const failedGateTraits = [];
+  
+  // Calculate calf EPDs for scoring
+  const calfEpdValues = {};
   
   // Process each trait
   for (const trait of traits) {
@@ -273,6 +346,7 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
     
     // Calculate calf EPD
     const calfEpd = (sireValue + cowValue) / 2;
+    calfEpdValues[trait] = calfEpd;
     
     // Compare calf EPD to cow EPD to determine if improved or worsened
     // Only count if values are different (not equal)
@@ -304,25 +378,12 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
     // Get color goodness
     const goodness = getColorGoodness(band);
     
-    // Add to base score (all traits contribute)
-    baseScore += weight * goodness;
-    
     // Check if worse than light green (baseline for penalties)
     if (isWorseThanLightGreen(band)) {
       numBelowLightGreenAllTraits++;
-      const colorRank = getColorRank(band);
-      const lightGreenRank = getColorRank(BANDS.LIGHT_GREEN);
-      const rankDiff = colorRank - lightGreenRank;
       
-      // Below light green penalty (applied to all traits worse than Light Green: Gray, Pink, Red, Dark Red)
-      belowLightGreenPenalty += rankDiff * 0.25 * weight;
-      
-      // Extra gate penalty if this is a gate trait AND worse than Gray (Pink, Red, Dark Red)
-      // Note: Gray passes gates but still gets the below-light-green penalty above
+      // Check for gate failures
       if (gateTraits.length > 0 && gateTraits.includes(trait) && isWorseThanGray(band)) {
-        const grayRank = getColorRank(BANDS.GRAY);
-        const gateRankDiff = colorRank - grayRank;
-        extraGatePenalty += gateRankDiff * 0.60 * weight;
         failedGateTraits.push(trait);
       }
     }
@@ -346,8 +407,8 @@ function evaluateMating(cow, sire, traits, percentileData, colorCriteria, config
     };
   }
   
-  // Calculate final score
-  const finalScore = baseScore - belowLightGreenPenalty - extraGatePenalty;
+  // Use shared scoring function
+  const finalScore = scoreEpdValues(calfEpdValues, percentileData, colorCriteria, gateTraits);
   
   // Check gate (all gate traits must be <= GRAY, or no gates if empty)
   // Note: Gray is acceptable for gates, but still receives penalty in scoring
@@ -506,6 +567,7 @@ module.exports = {
   isWorseThanGray, // Kept for backward compatibility
   percentileFromEpd,
   colorFromPercentile,
+  scoreEpdValues,
   evaluateMating,
   rankAllMatings
 };

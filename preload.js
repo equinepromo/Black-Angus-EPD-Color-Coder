@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addCategory: (categoryName) => ipcRenderer.invoke('add-category', categoryName),
   deleteCategory: (categoryName) => ipcRenderer.invoke('delete-category', categoryName),
   getPercentileData: (animalType) => ipcRenderer.invoke('get-percentile-data', animalType),
+  scoreAnimal: (epdValues, animalType, gateTraits) => ipcRenderer.invoke('score-animal', { epdValues, animalType, gateTraits }),
   // Update APIs
   checkForUpdates: (showDialog) => ipcRenderer.invoke('check-for-updates', showDialog),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),

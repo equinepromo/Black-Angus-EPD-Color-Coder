@@ -1,79 +1,36 @@
-feat: Add All Matings Ranking and Herd Inventory Management
+feat: Add scoring to Animal Entry tab, category filtering, and UI improvements
 
-Major Features:
-- All Matings Ranking: New feature to rank all possible matings (cows × sires)
-  * Evaluates all cached cow × sire combinations
-  * Computes calf EPDs, percentiles, and color bands for each mating
-  * Applies gate rules (no trait worse than Gray on gate traits)
-  * Scores matings using color-based goodness with configurable weights
-  * Displays results grouped by cow with sires ranked best-to-worst
-  * Shows all EPD traits with color coding, not just weakness traits
-  * Includes sire summary showing how many times each bull ranks #1, #2, etc.
-  * Supports filtering by gate-pass and configurable top N per cow (default 5)
-  * Top N dropdown options: 1-10 (default 5)
-  * Integrated into Mating Calculator with mode toggle (Single/All Matings)
+Animal Entry Tab Scoring:
+- Added scoring functionality to Animal Entry tab using same formula as mating scoring
+- Added Score column to results table with default sort by score (descending)
+- Scores calculated using emphasis-based weighting, penalties, and gate logic
+- Maintains existing table sorting functionality
 
-- Herd Inventory Management: New section to view and manage cached animals
-  * View all cached animals with name, registration number, sex, and cached date
-  * Filter by type (All Animals / Cows Only / Sires Only)
-  * Search by name or registration number
-  * Select multiple animals via checkboxes for comparison
-  * Select All checkbox in header to quickly select filtered results
-  * Compare Selected button to load all selected animals into main results
-  * View Details button opens modal with individual animal EPD data
-  * Delete button to remove animals from cache
-  * Auto-refreshes dropdowns after deletion
+Code Refactoring:
+- Extracted shared scoring function `scoreEpdValues()` in mating-ranker.js
+- Refactored `evaluateMating()` to use shared scoring function
+- Added IPC handler `score-animal` for scoring individual animals
+- Removed ~300 lines of duplicated scoring code from renderer
+- Improved code maintainability and consistency (DRY principle)
 
-- Animal Details Modal: Popup window for viewing individual animal details
-  * Opens from "View Details" button in inventory
-  * Shows animal information (name, registration, sex, sire, dam, birth date)
-  * Displays all EPD values with color coding matching main results
-  * Close button, click outside, or Escape key to dismiss
-  * Scrollable content for long trait lists
+All Matings Category Filtering:
+- Added category selectors for sires and cows in All Matings mode
+- Defaults to "All" categories (backward compatible)
+- Filters animals by selected category before sex filtering
+- Updated `getCachedAnimalsWithData()` to include category in returned data
+
+UI Improvements:
+- Removed max-width constraint on main container to support ultra-wide monitors
+- Improved gate traits checkbox layout (removed scrollable container, full-width grid)
+- Gate traits now display in responsive grid that adapts to screen width
+- Added Excel export button to All Matings results
+- Excel export includes score, gate status, and all mating data
 
 Technical Changes:
-- Added main/mating-ranker.js: Core ranking logic module
-  * Band mapping, color ranking, and goodness functions
-  * Percentile lookup integration
-  * Color mapping from percentile using color-criteria.json
-  * Gate evaluation and scoring algorithms
-  * Ranking with top N per cow support
-
-- Enhanced main/cache-util.js:
-  * Added getCachedAnimalsWithData() to return full animal EPD data
-  * Added deleteCachedAnimal() to remove individual cached animals
-
-- Enhanced main/main.js:
-  * Added IPC handler 'rank-all-matings' with progress updates
-  * Added IPC handler 'delete-cached-animal'
-  * Includes full animal data in ranked results for detail view
-
-- Enhanced preload.js:
-  * Exposed rankAllMatings() API
-  * Exposed deleteCachedAnimal() API
-
-- Enhanced renderer/index.html:
-  * Added mode toggle UI for Single/All Matings in Mating Calculator
-  * Added Top N dropdown and gate filter checkbox
-  * Added Herd Inventory section with filters, search, and controls
-  * Added animal details modal structure
-
-- Enhanced renderer/renderer.js:
-  * Added displayAllMatingsResults() for ranked matings table
-  * Added showMatingDetail() to display detailed view from ranked results
-  * Added back button functionality to return to ranked results
-  * Added herd inventory management functions
-  * Added modal functionality for animal details
-  * Added select all and compare selected functionality
-
-- Enhanced renderer/styles.css:
-  * Added modal styles with backdrop and animations
-  * Enhanced close button visibility with red styling
-
-UI/UX Improvements:
-- Results grouped by cow for easier decision-making
-- All EPD traits displayed (not just weakness traits)
-- Sire summary table shows ranking frequency across all cows
-- Inventory filtering and search for easy animal management
-- Modal provides quick access to individual animal details without scrolling
-- Select All speeds up bulk selection workflow
+- Enhanced main/cache-util.js: Include category in animal data objects
+- Enhanced main/main.js: Added category filtering to rank-all-matings handler
+- Enhanced main/mating-ranker.js: Extracted scoreEpdValues() shared function
+- Enhanced preload.js: Added scoreAnimal() IPC API
+- Enhanced renderer/renderer.js: Scoring, category filtering, Excel export
+- Enhanced renderer/index.html: Category selectors, improved gate traits UI
+- Enhanced renderer/styles.css: Removed container max-width constraint

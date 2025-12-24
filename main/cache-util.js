@@ -438,8 +438,10 @@ function getCachedAnimalsWithData() {
         const cached = JSON.parse(cacheContent);
         
         if (cached && cached.data) {
-          // Return full data object
-          animals.push(cached.data);
+          // Return full data object with category included
+          const animalData = { ...cached.data };
+          animalData.category = cached.category || 'My Herd'; // Include category in data
+          animals.push(animalData);
         }
       } catch (error) {
         // Skip files we can't read or parse

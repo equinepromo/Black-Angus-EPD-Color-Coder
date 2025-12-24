@@ -195,9 +195,9 @@
                             <option value="10">10</option>
                         </select>
                     </div>
-                    <div style="flex: 1; min-width: 250px;">
+                    <div style="flex: 1; min-width: 100%; width: 100%;">
                         <label>Gate Traits (optional):</label>
-                        <div id="gate-traits-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-top: 5px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; max-height: 150px; overflow-y: auto; background-color: #fff;">
+                        <div id="gate-traits-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-top: 5px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #fff;">
                             <!-- Checkboxes will be populated dynamically -->
                         </div>
                         <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
@@ -212,6 +212,23 @@
                         <small style="color: #666; font-size: 0.85em; display: block; margin-top: 5px;">
                             (Only applies if gate traits are selected)
                         </small>
+                    </div>
+                </div>
+                
+                <div class="input-group" style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; margin-top: 15px;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="sire-category-select">Sire Category:</label>
+                        <select id="sire-category-select" class="cached-animals-dropdown">
+                            <option value="all" selected>All</option>
+                            <!-- Categories will be populated dynamically -->
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="cow-category-select">Cow Category:</label>
+                        <select id="cow-category-select" class="cached-animals-dropdown">
+                            <option value="all" selected>All</option>
+                            <!-- Categories will be populated dynamically -->
+                        </select>
                     </div>
                 </div>
                 
