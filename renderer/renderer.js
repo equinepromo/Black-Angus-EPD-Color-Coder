@@ -2262,12 +2262,12 @@ function displayInventory() {
     });
   }
   
-  // Apply category filter
+  // Apply category filter (support multi-category)
   const categoryFilterValue = categoryFilter ? categoryFilter.value : 'all';
   if (categoryFilterValue !== 'all') {
     filtered = filtered.filter(animal => {
-      const animalCategory = animal.category || 'My Herd';
-      return animalCategory === categoryFilterValue;
+      const animalCategories = animal.categories || (animal.category ? [animal.category] : ['My Herd']);
+      return animalCategories.includes(categoryFilterValue);
     });
   }
   
@@ -2412,20 +2412,22 @@ function displayInventory() {
     sexCell.style.border = '1px solid #000';
     row.appendChild(sexCell);
     
-    // Category
+    // Category - show all categories
     const categoryCell = document.createElement('td');
-    const animalCategory = animal.category || 'My Herd';
-    categoryCell.textContent = animalCategory;
+    const animalCategories = animal.categories || (animal.category ? [animal.category] : ['My Herd']);
+    const categoriesText = animalCategories.join(', ');
+    categoryCell.textContent = categoriesText;
     categoryCell.style.padding = '8px';
     categoryCell.style.border = '1px solid #000';
     categoryCell.style.textAlign = 'center';
+    categoryCell.title = categoriesText; // Tooltip with full list
     // Apply category badge styling - only "My Herd" gets special green color
-    if (animalCategory === 'My Herd') {
+    if (animalCategories.includes('My Herd')) {
       categoryCell.style.backgroundColor = '#d4edda';
       categoryCell.style.color = '#155724';
       categoryCell.style.fontWeight = 'bold';
     } else {
-      // All other categories (including old "Researching" and "Watchlist" if they exist) - gray
+      // All other categories - gray
       categoryCell.style.backgroundColor = '#e9ecef';
       categoryCell.style.color = '#495057';
       categoryCell.style.fontWeight = 'bold';
@@ -2469,25 +2471,48 @@ function displayInventory() {
     changeCategoryBtn.style.padding = '4px 8px';
     changeCategoryBtn.style.fontSize = '0.9em';
     changeCategoryBtn.addEventListener('click', async () => {
-      // Get current category
-      const currentCategory = animal.category || 'My Herd';
+      // Get current categories (support both old and new format)
+      const currentCategories = animal.categories || (animal.category ? [animal.category] : ['My Herd']);
       
-      // Create a simple selection dialog using select element
-      const categorySelect = document.createElement('select');
-      categorySelect.style.width = '100%';
-      categorySelect.style.padding = '8px';
-      categorySelect.style.marginBottom = '15px';
-      categorySelect.style.fontSize = '14px';
+      // Create checkbox container for multi-select
+      const checkboxContainer = document.createElement('div');
+      checkboxContainer.style.maxHeight = '300px';
+      checkboxContainer.style.overflowY = 'auto';
+      checkboxContainer.style.border = '1px solid #ddd';
+      checkboxContainer.style.borderRadius = '4px';
+      checkboxContainer.style.padding = '10px';
+      checkboxContainer.style.marginBottom = '15px';
       
+      const checkboxes = [];
       availableCategories.forEach(cat => {
-        const option = document.createElement('option');
-        option.value = cat;
-        option.textContent = cat;
-        if (cat === currentCategory) {
-          option.selected = true;
-        }
-        categorySelect.appendChild(option);
+        const label = document.createElement('label');
+        label.style.display = 'block';
+        label.style.padding = '5px';
+        label.style.cursor = 'pointer';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = cat;
+        checkbox.checked = currentCategories.includes(cat);
+        checkbox.style.marginRight = '8px';
+        
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(cat));
+        checkboxContainer.appendChild(label);
+        checkboxes.push(checkbox);
       });
+      
+      // Mode selector (replace, add, remove)
+      const modeContainer = document.createElement('div');
+      modeContainer.style.marginBottom = '15px';
+      modeContainer.innerHTML = `
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Operation Mode:</label>
+        <select id="category-mode-select" style="width: 100%; padding: 8px;">
+          <option value="replace">Replace all categories</option>
+          <option value="add">Add to existing categories</option>
+          <option value="remove">Remove selected categories</option>
+        </select>
+      `;
       
       // Create modal-like dialog
       const dialog = document.createElement('div');
@@ -2506,15 +2531,20 @@ function displayInventory() {
       dialogContent.style.backgroundColor = 'white';
       dialogContent.style.padding = '20px';
       dialogContent.style.borderRadius = '8px';
-      dialogContent.style.minWidth = '300px';
+      dialogContent.style.minWidth = '350px';
+      dialogContent.style.maxWidth = '500px';
+      dialogContent.style.maxHeight = '80vh';
+      dialogContent.style.overflowY = 'auto';
       dialogContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
       
       dialogContent.innerHTML = `
-        <h3 style="margin-top: 0;">Change Category</h3>
+        <h3 style="margin-top: 0;">Change Categories</h3>
         <p style="margin-bottom: 10px;">Animal: ${animal.animalName || animal.registrationNumber}</p>
+        <p style="margin-bottom: 10px; font-size: 0.9em; color: #666;">Current categories: ${currentCategories.join(', ')}</p>
       `;
       
-      dialogContent.appendChild(categorySelect);
+      dialogContent.appendChild(modeContainer);
+      dialogContent.appendChild(checkboxContainer);
       
       const buttonContainer = document.createElement('div');
       buttonContainer.style.display = 'flex';
@@ -2533,26 +2563,30 @@ function displayInventory() {
       saveBtn.textContent = 'Save';
       saveBtn.className = 'btn btn-primary';
       saveBtn.addEventListener('click', async () => {
-        const selectedCategory = categorySelect.value;
+        const selectedCategories = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
+        const mode = document.getElementById('category-mode-select').value;
         
-        if (availableCategories.includes(selectedCategory)) {
-          try {
-            const result = await window.electronAPI.updateAnimalCategory(animal.registrationNumber, selectedCategory);
-            if (result.success) {
-              // Update local data and refresh display
-              animal.category = selectedCategory;
-              displayInventory();
-              // Also refresh cached animals dropdowns
-              loadCachedAnimals();
-              document.body.removeChild(dialog);
-            } else {
-              alert('Error updating category: ' + (result.error || 'Unknown error'));
-            }
-          } catch (error) {
-            alert('Error updating category: ' + error.message);
+        if (selectedCategories.length === 0 && mode !== 'remove') {
+          alert('Please select at least one category');
+          return;
+        }
+        
+        try {
+          const result = await window.electronAPI.updateAnimalCategories(animal.registrationNumber, selectedCategories, mode);
+          if (result.success) {
+            // Update local data and refresh display
+            animal.categories = result.categories || selectedCategories;
+            animal.category = animal.categories[0] || 'My Herd'; // Keep backward compatibility
+            // Reload inventory to get fresh data
+            await loadInventory();
+            // Also refresh cached animals dropdowns
+            loadCachedAnimals();
+            document.body.removeChild(dialog);
+          } else {
+            alert('Error updating categories: ' + (result.error || 'Unknown error'));
           }
-        } else {
-          alert('Invalid category selected');
+        } catch (error) {
+          alert('Error updating categories: ' + error.message);
         }
       });
       
@@ -2636,6 +2670,11 @@ function updateSelectedCount() {
   if (bulkChangeCategoryBtn) {
     bulkChangeCategoryBtn.disabled = count === 0;
   }
+  // Update export button state
+  const exportSelectedBulkFileBtn = document.getElementById('export-selected-bulk-file-btn');
+  if (exportSelectedBulkFileBtn) {
+    exportSelectedBulkFileBtn.disabled = count === 0;
+  }
 }
 
 // Compare selected animals
@@ -2675,19 +2714,44 @@ async function bulkChangeCategory() {
     return;
   }
   
-  // Create a simple selection dialog using select element
-  const categorySelect = document.createElement('select');
-  categorySelect.style.width = '100%';
-  categorySelect.style.padding = '8px';
-  categorySelect.style.marginBottom = '15px';
-  categorySelect.style.fontSize = '14px';
+  // Create checkbox container for multi-select
+  const checkboxContainer = document.createElement('div');
+  checkboxContainer.style.maxHeight = '300px';
+  checkboxContainer.style.overflowY = 'auto';
+  checkboxContainer.style.border = '1px solid #ddd';
+  checkboxContainer.style.borderRadius = '4px';
+  checkboxContainer.style.padding = '10px';
+  checkboxContainer.style.marginBottom = '15px';
   
+  const checkboxes = [];
   availableCategories.forEach(cat => {
-    const option = document.createElement('option');
-    option.value = cat;
-    option.textContent = cat;
-    categorySelect.appendChild(option);
+    const label = document.createElement('label');
+    label.style.display = 'block';
+    label.style.padding = '5px';
+    label.style.cursor = 'pointer';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = cat;
+    checkbox.style.marginRight = '8px';
+    
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(cat));
+    checkboxContainer.appendChild(label);
+    checkboxes.push(checkbox);
   });
+  
+  // Mode selector (replace, add, remove)
+  const modeContainer = document.createElement('div');
+  modeContainer.style.marginBottom = '15px';
+  modeContainer.innerHTML = `
+    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Operation Mode:</label>
+    <select id="bulk-category-mode-select" style="width: 100%; padding: 8px;">
+      <option value="replace">Replace all categories</option>
+      <option value="add">Add to existing categories</option>
+      <option value="remove">Remove selected categories</option>
+    </select>
+  `;
   
   // Create modal-like dialog
   const dialog = document.createElement('div');
@@ -2707,14 +2771,18 @@ async function bulkChangeCategory() {
   dialogContent.style.padding = '20px';
   dialogContent.style.borderRadius = '8px';
   dialogContent.style.minWidth = '350px';
+  dialogContent.style.maxWidth = '500px';
+  dialogContent.style.maxHeight = '80vh';
+  dialogContent.style.overflowY = 'auto';
   dialogContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
   
   dialogContent.innerHTML = `
-    <h3 style="margin-top: 0;">Bulk Change Category</h3>
-    <p style="margin-bottom: 10px;">Change category for <strong>${selectedAnimals.size}</strong> selected animal(s):</p>
+    <h3 style="margin-top: 0;">Bulk Change Categories</h3>
+    <p style="margin-bottom: 10px;">Change categories for <strong>${selectedAnimals.size}</strong> selected animal(s):</p>
   `;
   
-  dialogContent.appendChild(categorySelect);
+  dialogContent.appendChild(modeContainer);
+  dialogContent.appendChild(checkboxContainer);
   
   const buttonContainer = document.createElement('div');
   buttonContainer.style.display = 'flex';
@@ -2730,58 +2798,58 @@ async function bulkChangeCategory() {
   });
   
   const saveBtn = document.createElement('button');
-  saveBtn.textContent = 'Change Category';
+  saveBtn.textContent = 'Change Categories';
   saveBtn.className = 'btn btn-primary';
   saveBtn.addEventListener('click', async () => {
-    const newCategory = categorySelect.value;
+    const selectedCategories = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
+    const mode = document.getElementById('bulk-category-mode-select').value;
     
-    if (availableCategories.includes(newCategory)) {
-      const registrationNumbers = Array.from(selectedAnimals);
-      let successCount = 0;
-      let errorCount = 0;
-      const errors = [];
-      
-      // Disable button during operation
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Updating...';
-      
-      // Update each animal's category
-      for (const regNum of registrationNumbers) {
-        try {
-          const result = await window.electronAPI.updateAnimalCategory(regNum, newCategory);
-          if (result.success) {
-            successCount++;
-            // Update local data
-            const animal = allInventoryAnimals.find(a => a.registrationNumber === regNum);
-            if (animal) {
-              animal.category = newCategory;
-            }
-          } else {
-            errorCount++;
-            errors.push(`${regNum}: ${result.error || 'Unknown error'}`);
-          }
-        } catch (error) {
-          errorCount++;
-          errors.push(`${regNum}: ${error.message}`);
-        }
-      }
-      
-      // Close dialog
-      document.body.removeChild(dialog);
-      
-      // Show results
-      if (errorCount === 0) {
-        alert(`Successfully changed category to "${newCategory}" for ${successCount} animal(s).`);
-      } else {
-        alert(`Updated ${successCount} animal(s). ${errorCount} error(s):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`);
-      }
-      
-      // Refresh display and clear selection
-      displayInventory();
-      loadCachedAnimals();
-    } else {
-      alert('Invalid category selected');
+    if (selectedCategories.length === 0 && mode !== 'remove') {
+      alert('Please select at least one category');
+      return;
     }
+    
+    const registrationNumbers = Array.from(selectedAnimals);
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+    
+    // Disable button during operation
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Updating...';
+    
+    // Update each animal's categories
+    for (const regNum of registrationNumbers) {
+      try {
+        const result = await window.electronAPI.updateAnimalCategories(regNum, selectedCategories, mode);
+        if (result.success) {
+          successCount++;
+        } else {
+          errorCount++;
+          errors.push(`${regNum}: ${result.error || 'Unknown error'}`);
+        }
+      } catch (error) {
+        errorCount++;
+        errors.push(`${regNum}: ${error.message}`);
+      }
+    }
+    
+    // Close dialog
+    document.body.removeChild(dialog);
+    
+    // Show results
+    const modeText = mode === 'replace' ? 'replaced with' : mode === 'add' ? 'added' : 'removed';
+    if (errorCount === 0) {
+      alert(`Successfully ${modeText} categories for ${successCount} animal(s).`);
+    } else {
+      alert(`Updated ${successCount} animal(s). ${errorCount} error(s):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`);
+    }
+    
+    // Reload inventory to get fresh data
+    await loadInventory();
+    selectedAnimals.clear();
+    updateSelectedCount();
+    loadCachedAnimals();
   });
   
   buttonContainer.appendChild(cancelBtn);
@@ -2830,6 +2898,199 @@ if (compareSelectedBtn) {
 
 if (bulkChangeCategoryBtn) {
   bulkChangeCategoryBtn.addEventListener('click', bulkChangeCategory);
+}
+
+// Export selected animals to bulk file
+const exportSelectedBulkFileBtn = document.getElementById('export-selected-bulk-file-btn');
+if (exportSelectedBulkFileBtn) {
+  exportSelectedBulkFileBtn.addEventListener('click', async () => {
+    const selectedAnimalsArray = allInventoryAnimals.filter(a => selectedAnimals.has(a.registrationNumber));
+    if (selectedAnimalsArray.length === 0) {
+      alert('Please select at least one animal to export');
+      return;
+    }
+
+    await exportAnimalsToBulkFile(selectedAnimalsArray, 'Export Selected Animals');
+  });
+}
+
+// Export category to bulk file
+const exportCategoryBulkFileBtn = document.getElementById('export-category-bulk-file-btn');
+if (exportCategoryBulkFileBtn) {
+  exportCategoryBulkFileBtn.addEventListener('click', async () => {
+    const selectedCategory = categoryFilter ? categoryFilter.value : 'all';
+    if (selectedCategory === 'all') {
+      alert('Please select a specific category to export');
+      return;
+    }
+
+    const categoryAnimals = allInventoryAnimals.filter(animal => {
+      const animalCategories = normalizeCategoriesForDisplay(animal.categories || animal.category);
+      return animalCategories.includes(selectedCategory);
+    });
+
+    if (categoryAnimals.length === 0) {
+      alert(`No animals found in category "${selectedCategory}"`);
+      return;
+    }
+
+    await exportAnimalsToBulkFile(categoryAnimals, `Export Category: ${selectedCategory}`, {
+      category: selectedCategory,
+      type: `category-${selectedCategory.toLowerCase().replace(/\s+/g, '-')}`
+    });
+  });
+}
+
+// Helper function to normalize categories for display/filtering
+function normalizeCategoriesForDisplay(categoryOrArray) {
+  if (!categoryOrArray) return ['My Herd'];
+  if (Array.isArray(categoryOrArray)) return categoryOrArray.filter(c => c && typeof c === 'string');
+  if (typeof categoryOrArray === 'string') return [categoryOrArray];
+  return ['My Herd'];
+}
+
+// Export animals to bulk file - uses modal dialog
+let exportDialogResolve = null;
+let exportDialogAnimals = null;
+let exportDialogOptions = null;
+
+// Set up export dialog event listeners (once)
+(function setupExportDialog() {
+  const exportDialog = document.getElementById('bulk-file-export-dialog');
+  const versionInput = document.getElementById('bulk-export-version');
+  const typeInput = document.getElementById('bulk-export-type');
+  const descriptionInput = document.getElementById('bulk-export-description');
+  const confirmBtn = document.getElementById('confirm-bulk-file-export-btn');
+  const cancelBtn = document.getElementById('cancel-bulk-file-export-btn');
+  const closeBtn = document.getElementById('close-bulk-file-export-dialog-btn');
+
+  if (!exportDialog || !confirmBtn || !cancelBtn || !closeBtn) return;
+
+  const closeDialog = () => {
+    if (exportDialog) {
+      exportDialog.style.display = 'none';
+    }
+    if (exportDialogResolve) {
+      exportDialogResolve();
+      exportDialogResolve = null;
+    }
+    exportDialogAnimals = null;
+    exportDialogOptions = null;
+  };
+
+  // Confirm button handler
+  confirmBtn.addEventListener('click', async () => {
+    if (!exportDialogAnimals || !versionInput || !typeInput) {
+      closeDialog();
+      return;
+    }
+
+    const version = versionInput.value.trim();
+    const type = typeInput.value.trim();
+
+    if (!version) {
+      alert('Please enter a version number');
+      return;
+    }
+
+    if (!type) {
+      alert('Please enter a type/name');
+      return;
+    }
+
+    const exportOptions = {
+      version,
+      type,
+      category: exportDialogOptions?.category || null,
+      description: descriptionInput?.value.trim() || null,
+      filename: `${type}-v${version}.json`
+    };
+
+    try {
+      const result = await window.electronAPI.exportAnimalsToBulkFile(exportDialogAnimals, exportOptions);
+
+      if (result.success) {
+        alert(`Bulk file exported successfully!\n\nFile: ${result.path}\nAnimals: ${result.animalCount}`);
+      } else {
+        alert(`Export failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error exporting animals to bulk file:', error);
+      alert(`Error exporting: ${error.message}`);
+    }
+
+    closeDialog();
+  });
+
+  // Cancel button
+  cancelBtn.addEventListener('click', closeDialog);
+
+  // Close button
+  closeBtn.addEventListener('click', closeDialog);
+
+  // Close on click outside
+  exportDialog.addEventListener('click', (e) => {
+    if (e.target === exportDialog) {
+      closeDialog();
+    }
+  });
+
+  // Close on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && exportDialog && exportDialog.style.display === 'block') {
+      closeDialog();
+    }
+  });
+
+  // Allow Enter key to submit from inputs
+  [versionInput, typeInput, descriptionInput].forEach(input => {
+    if (input) {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          confirmBtn.click();
+        }
+      });
+    }
+  });
+})();
+
+async function exportAnimalsToBulkFile(animals, title, options = {}) {
+  return new Promise((resolve) => {
+    const exportDialog = document.getElementById('bulk-file-export-dialog');
+    const exportTitle = document.getElementById('bulk-file-export-title');
+    const versionInput = document.getElementById('bulk-export-version');
+    const typeInput = document.getElementById('bulk-export-type');
+    const descriptionInput = document.getElementById('bulk-export-description');
+
+    if (!exportDialog || !versionInput || !typeInput) {
+      alert('Export dialog elements not found');
+      resolve();
+      return;
+    }
+
+    // Store for use by event handlers
+    exportDialogResolve = resolve;
+    exportDialogAnimals = animals;
+    exportDialogOptions = options;
+
+    // Set title
+    if (exportTitle) {
+      exportTitle.textContent = title || 'Export to Bulk File';
+    }
+
+    // Set default values
+    versionInput.value = options.version || '1.0.0';
+    typeInput.value = options.type || 'bulk-file';
+    if (descriptionInput) {
+      descriptionInput.value = options.description || '';
+    }
+
+    // Show dialog and focus first input
+    exportDialog.style.display = 'block';
+    versionInput.focus();
+    versionInput.select();
+  });
 }
 
 // Delete category animals button
@@ -2905,15 +3166,14 @@ if (deleteCategoryBtn) {
       if (availableCategories.includes(categoryToDelete)) {
         const confirmMessage = `Are you sure you want to delete ALL animals in the "${categoryToDelete}" category?\n\nThis action cannot be undone.`;
         if (confirm(confirmMessage)) {
-          try {
+            try {
             const result = await window.electronAPI.deleteAnimalsByCategory(categoryToDelete);
             if (result.success) {
-              alert(`Successfully deleted ${result.deletedCount} animals from category "${categoryToDelete}".`);
-              // Remove from selected animals
-              allInventoryAnimals = allInventoryAnimals.filter(a => (a.category || 'My Herd') !== categoryToDelete);
+              alert(`Successfully deleted ${result.deletedCount} animal(s) from category "${categoryToDelete}".`);
+              // Reload inventory to get fresh data
+              await loadInventory();
               selectedAnimals.clear();
               updateSelectedCount();
-              displayInventory();
               // Also refresh cached animals dropdowns
               loadCachedAnimals();
               document.body.removeChild(dialog);
@@ -2955,6 +3215,7 @@ if (deleteCategoryBtn) {
 
 // Initialize selected count
 updateSelectedCount();
+
 
 // Modal functionality
 const animalDetailsModal = document.getElementById('animal-details-modal');
@@ -3310,6 +3571,382 @@ if (manageCategoriesBtn) {
 
 // Load inventory on page load
 loadInventory();
+
+// ==================== Bulk File Management ====================
+
+let bulkFileStatus = null;
+let pendingUpdates = [];
+
+// Load bulk file status on page load
+async function loadBulkFileStatus() {
+  try {
+    const result = await window.electronAPI.getBulkFileStatus();
+    if (result.success) {
+      bulkFileStatus = result;
+      displayBulkFileStatus(result);
+    } else {
+      console.error('Error loading bulk file status:', result.error);
+    }
+  } catch (error) {
+    console.error('Error loading bulk file status:', error);
+  }
+}
+
+// Display bulk file status
+function displayBulkFileStatus(status) {
+  const container = document.getElementById('bulk-files-status-container');
+  if (!container) return;
+
+  if (!status.bulkFiles || status.bulkFiles.length === 0) {
+    container.innerHTML = '<div class="placeholder"><p>No bulk files available</p></div>';
+    return;
+  }
+
+  let html = '<div style="display: grid; gap: 15px;">';
+  
+  status.bulkFiles.forEach(bf => {
+    const statusBadge = getStatusBadge(bf.status);
+    const versionInfo = bf.localVersion ? `v${bf.localVersion} → v${bf.manifestVersion}` : `v${bf.manifestVersion}`;
+    
+    html += `
+      <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+          <div>
+            <h3 style="margin: 0 0 5px 0;">${bf.name}</h3>
+            <p style="margin: 0; color: #666; font-size: 0.9em;">${bf.description || ''}</p>
+          </div>
+          ${statusBadge}
+        </div>
+        <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
+          <div>Version: ${versionInfo}</div>
+          <div>Animals: ${bf.animalCount || 0}</div>
+          ${bf.lastProcessed ? `<div>Last Imported: ${new Date(bf.lastProcessed).toLocaleString()}</div>` : ''}
+        </div>
+        <div style="margin-top: 15px;">
+          <button class="btn btn-primary bulk-file-import-btn" data-bulk-file-id="${bf.id}" data-url="${bf.url || ''}" style="margin-right: 10px;" ${!bf.url ? 'disabled title="URL not available - check for updates first"' : ''}>
+            ${bf.status === 'not-imported' ? 'Import' : bf.status === 'update-available' ? 'Update' : 'Re-import'}
+          </button>
+          ${bf.status === 'update-available' && !bf.ignored?.permanent ? `
+            <button class="btn btn-secondary bulk-file-ignore-btn" data-bulk-file-id="${bf.id}" data-version="${bf.manifestVersion}">
+              Ignore Update
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  });
+  
+  html += '</div>';
+  container.innerHTML = html;
+  
+  // Attach event listeners
+  attachBulkFileEventListeners(container);
+
+}
+
+function attachBulkFileEventListeners(container) {
+  container.querySelectorAll('.bulk-file-import-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const bulkFileId = e.target.dataset.bulkFileId;
+      const url = e.target.dataset.url;
+      if (!url) {
+        alert('URL not available. Please check for updates first.');
+        return;
+      }
+      await showBulkFileImportDialog(bulkFileId, url);
+    });
+  });
+
+  container.querySelectorAll('.bulk-file-ignore-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const bulkFileId = e.target.dataset.bulkFileId;
+      const version = e.target.dataset.version;
+      await ignoreBulkFileUpdate(bulkFileId, version);
+    });
+  });
+}
+
+function displayBulkFileStatusFallback(status, container) {
+  let html = '<div style="display: grid; gap: 15px;">';
+  
+  status.bulkFiles.forEach(bf => {
+    const statusBadge = getStatusBadge(bf.status);
+    const versionInfo = bf.localVersion ? `v${bf.localVersion} → v${bf.manifestVersion}` : `v${bf.manifestVersion}`;
+    
+    html += `
+      <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+          <div>
+            <h3 style="margin: 0 0 5px 0;">${bf.name}</h3>
+            <p style="margin: 0; color: #666; font-size: 0.9em;">${bf.description || ''}</p>
+          </div>
+          ${statusBadge}
+        </div>
+        <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
+          <div>Version: ${versionInfo}</div>
+          <div>Animals: ${bf.animalCount || 0}</div>
+          ${bf.lastProcessed ? `<div>Last Imported: ${new Date(bf.lastProcessed).toLocaleString()}</div>` : ''}
+        </div>
+        <div style="margin-top: 15px;">
+          <button class="btn btn-primary bulk-file-import-btn" data-bulk-file-id="${bf.id}" data-url="" style="margin-right: 10px;" disabled>
+            ${bf.status === 'not-imported' ? 'Import' : bf.status === 'update-available' ? 'Update' : 'Re-import'} (Check for updates first)
+          </button>
+        </div>
+      </div>
+    `;
+  });
+  
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function getStatusBadge(status) {
+  const badges = {
+    'up-to-date': '<span style="background-color: #4caf50; color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.85em;">Up to Date</span>',
+    'update-available': '<span style="background-color: #ff9800; color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.85em;">Update Available</span>',
+    'not-imported': '<span style="background-color: #2196f3; color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.85em;">Not Imported</span>'
+  };
+  return badges[status] || '';
+}
+
+// Show bulk file import dialog
+async function showBulkFileImportDialog(bulkFileId, url) {
+  const dialog = document.getElementById('bulk-file-import-dialog');
+  const content = document.getElementById('bulk-file-import-content');
+  
+  if (!dialog || !content) return;
+
+  // Get available categories
+  const categories = await window.electronAPI.getAvailableCategories();
+
+  content.innerHTML = `
+    <div>
+      <p><strong>Importing:</strong> ${bulkFileId}</p>
+      
+      <div style="margin-top: 20px;">
+        <label><strong>Category Assignment Mode:</strong></label>
+        <select id="bulk-import-category-mode" style="width: 100%; padding: 8px; margin-top: 5px;">
+          <option value="use-file-category">Use file's category</option>
+          <option value="user-selected">Select category</option>
+          <option value="add-to-existing">Add to existing categories</option>
+        </select>
+      </div>
+
+      <div id="bulk-import-category-select-container" style="margin-top: 15px; display: none;">
+        <label><strong>Select Category:</strong></label>
+        <select id="bulk-import-category-select" style="width: 100%; padding: 8px; margin-top: 5px;">
+          ${categories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+        </select>
+      </div>
+
+      <div style="margin-top: 15px;">
+        <label>
+          <input type="checkbox" id="bulk-import-create-category" checked>
+          Create category if it doesn't exist
+        </label>
+      </div>
+
+      <div style="margin-top: 15px;">
+        <label><strong>Update Strategy:</strong></label>
+        <select id="bulk-import-update-strategy" style="width: 100%; padding: 8px; margin-top: 5px;">
+          <option value="merge" selected>Always update</option>
+          <option value="update-if-newer">Update if newer</option>
+          <option value="skip-existing">Skip existing animals</option>
+          <option value="add-categories-only">Add categories only</option>
+        </select>
+      </div>
+
+      <div style="margin-top: 25px; display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="bulk-import-cancel-btn" class="btn btn-secondary">Cancel</button>
+        <button id="bulk-import-confirm-btn" class="btn btn-primary">Import</button>
+      </div>
+    </div>
+  `;
+
+  // Show category select when user-selected mode is chosen
+  const categoryModeSelect = content.querySelector('#bulk-import-category-mode');
+  const categorySelectContainer = content.querySelector('#bulk-import-category-select-container');
+  
+  categoryModeSelect.addEventListener('change', () => {
+    if (categoryModeSelect.value === 'user-selected') {
+      categorySelectContainer.style.display = 'block';
+    } else {
+      categorySelectContainer.style.display = 'none';
+    }
+  });
+
+  // Handle cancel
+  content.querySelector('#bulk-import-cancel-btn').addEventListener('click', () => {
+    dialog.style.display = 'none';
+  });
+
+  // Handle confirm
+  content.querySelector('#bulk-import-confirm-btn').addEventListener('click', async () => {
+    const categoryMode = categoryModeSelect.value;
+    const userSelectedCategories = categoryMode === 'user-selected' 
+      ? [content.querySelector('#bulk-import-category-select').value]
+      : null;
+    const createCategoryIfMissing = content.querySelector('#bulk-import-create-category').checked;
+    const updateStrategy = content.querySelector('#bulk-import-update-strategy').value;
+
+    const options = {
+      categoryMode,
+      userSelectedCategories,
+      createCategoryIfMissing,
+      updateStrategy
+    };
+
+    dialog.style.display = 'none';
+    await importBulkFile(bulkFileId, url, options);
+  });
+
+  dialog.style.display = 'block';
+}
+
+// Import bulk file
+async function importBulkFile(bulkFileId, url, options) {
+  try {
+    // Show progress
+    const statusContainer = document.getElementById('bulk-files-status-container');
+    const originalContent = statusContainer.innerHTML;
+    statusContainer.innerHTML = '<div class="placeholder"><p>Importing bulk file... Please wait.</p></div>';
+
+    // Listen for progress updates
+    window.electronAPI.onBulkFileProgress((data) => {
+      statusContainer.innerHTML = `<div class="placeholder"><p>${data.message || 'Processing...'} (${data.progress || 0}%)</p></div>`;
+    });
+
+    const result = await window.electronAPI.importBulkFile(bulkFileId, url, options);
+    
+    if (result.success) {
+      alert(`Bulk file imported successfully!\n\nImported: ${result.importedCount}\nUpdated: ${result.updatedCount || 0}\nSkipped: ${result.skippedCount || 0}`);
+      // Reload status
+      await loadBulkFileStatus();
+      // Reload categories to show any newly created categories
+      await loadCategoriesFromConfig();
+      // Refresh herd inventory to show newly imported/updated animals
+      await loadInventory();
+    } else {
+      alert(`Error importing bulk file: ${result.error}`);
+      statusContainer.innerHTML = originalContent;
+    }
+  } catch (error) {
+    console.error('Error importing bulk file:', error);
+    alert(`Error importing bulk file: ${error.message}`);
+  }
+}
+
+// Ignore bulk file update
+async function ignoreBulkFileUpdate(bulkFileId, version) {
+  try {
+    await window.electronAPI.ignoreBulkFileUpdate(bulkFileId, version, false);
+    await loadBulkFileStatus();
+  } catch (error) {
+    console.error('Error ignoring bulk file update:', error);
+    alert(`Error ignoring update: ${error.message}`);
+  }
+}
+
+// Check for bulk file updates
+async function checkBulkFileUpdates() {
+  try {
+    const result = await window.electronAPI.checkBulkFileUpdates();
+    if (result.success) {
+      pendingUpdates = result.pendingUpdates || [];
+      if (pendingUpdates.length > 0) {
+        showBulkFileUpdatesNotification(pendingUpdates);
+      } else {
+        alert('All bulk files are up to date.');
+      }
+    } else {
+      alert(`Error checking for updates: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error checking for bulk file updates:', error);
+    alert(`Error checking for updates: ${error.message}`);
+  }
+}
+
+// Show bulk file updates notification
+function showBulkFileUpdatesNotification(updates) {
+  const notification = document.getElementById('bulk-file-updates-notification');
+  const title = document.getElementById('bulk-file-updates-title');
+  const message = document.getElementById('bulk-file-updates-message');
+  
+  if (!notification || !title || !message) return;
+
+  title.textContent = `${updates.length} Bulk File Update${updates.length > 1 ? 's' : ''} Available`;
+  message.textContent = updates.map(u => `${u.name} (v${u.manifestVersion})`).join(', ');
+  
+  notification.style.display = 'block';
+}
+
+// Event listeners for bulk file management
+document.addEventListener('DOMContentLoaded', () => {
+  // Check for updates button
+  const checkUpdatesBtn = document.getElementById('check-bulk-updates-btn');
+  if (checkUpdatesBtn) {
+    checkUpdatesBtn.addEventListener('click', checkBulkFileUpdates);
+  }
+
+  // Refresh status button
+  const refreshStatusBtn = document.getElementById('refresh-bulk-status-btn');
+  if (refreshStatusBtn) {
+    refreshStatusBtn.addEventListener('click', loadBulkFileStatus);
+  }
+
+  // Close import dialog button
+  const closeImportDialogBtn = document.getElementById('close-bulk-import-dialog-btn');
+  if (closeImportDialogBtn) {
+    closeImportDialogBtn.addEventListener('click', () => {
+      document.getElementById('bulk-file-import-dialog').style.display = 'none';
+    });
+  }
+
+  // Bulk file updates notification buttons
+  const importAllBtn = document.getElementById('bulk-file-import-all-btn');
+  if (importAllBtn) {
+    importAllBtn.addEventListener('click', async () => {
+      // Import all pending updates (for now, just show message)
+      alert('Import all feature coming soon. Please import files individually from the Bulk Files tab.');
+      document.getElementById('bulk-file-updates-notification').style.display = 'none';
+    });
+  }
+
+  const importSelectedBtn = document.getElementById('bulk-file-import-selected-btn');
+  if (importSelectedBtn) {
+    importSelectedBtn.addEventListener('click', () => {
+      // Switch to bulk files tab
+      document.querySelector('[data-tab="bulk-files"]').click();
+      document.getElementById('bulk-file-updates-notification').style.display = 'none';
+    });
+  }
+
+  const ignoreBtn = document.getElementById('bulk-file-ignore-btn');
+  if (ignoreBtn) {
+    ignoreBtn.addEventListener('click', () => {
+      document.getElementById('bulk-file-updates-notification').style.display = 'none';
+    });
+  }
+
+  const dismissBtn = document.getElementById('bulk-file-dismiss-btn');
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', () => {
+      document.getElementById('bulk-file-updates-notification').style.display = 'none';
+    });
+  }
+
+  // Listen for bulk file updates from main process
+  window.electronAPI.onBulkFileUpdatesAvailable((data) => {
+    if (data && data.pendingUpdates && data.pendingUpdates.length > 0) {
+      pendingUpdates = data.pendingUpdates;
+      showBulkFileUpdatesNotification(data.pendingUpdates);
+    }
+  });
+});
+
+// Load bulk file status on page load
+loadBulkFileStatus();
 
 // Tab Navigation Functionality
 const tabButtons = document.querySelectorAll('.tab-button');

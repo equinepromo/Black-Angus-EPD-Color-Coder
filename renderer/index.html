@@ -41,11 +41,28 @@
             </div>
         </div>
 
+        <!-- Bulk File Updates Notification Banner -->
+        <div id="bulk-file-updates-notification" class="update-notification" style="display: none; background-color: #e3f2fd;">
+            <div class="update-notification-content">
+                <div class="update-notification-text">
+                    <strong id="bulk-file-updates-title">Bulk File Updates Available</strong>
+                    <span id="bulk-file-updates-message"></span>
+                </div>
+                <div class="update-notification-actions">
+                    <button id="bulk-file-import-all-btn" class="btn btn-primary">Import All</button>
+                    <button id="bulk-file-import-selected-btn" class="btn btn-primary">Import Selected</button>
+                    <button id="bulk-file-ignore-btn" class="btn btn-secondary">Ignore</button>
+                    <button id="bulk-file-dismiss-btn" class="btn btn-secondary">Dismiss</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Tab Navigation -->
         <div class="tabs-container">
             <button class="tab-button active" data-tab="animal-entry">Animal Entry</button>
             <button class="tab-button" data-tab="herd-inventory">Herd Inventory</button>
             <button class="tab-button" data-tab="mating-calculator">Mating Calculator</button>
+            <button class="tab-button" data-tab="bulk-files">Bulk Files</button>
         </div>
 
         <!-- Animal Entry Tab -->
@@ -115,6 +132,8 @@
                 <input type="text" id="inventory-search" placeholder="Search by name or registration number..." style="margin-left: 10px; padding: 8px; width: 300px;">
                 <button id="compare-selected-btn" class="btn btn-primary" style="margin-left: 10px;" disabled>Compare Selected (<span id="selected-count">0</span>)</button>
                 <button id="bulk-change-category-btn" class="btn btn-secondary" style="margin-left: 10px;" disabled>Change Category (<span id="selected-count-2">0</span>)</button>
+                <button id="export-selected-bulk-file-btn" class="btn btn-secondary" style="margin-left: 10px;" disabled>Export Selected to Bulk File</button>
+                <button id="export-category-bulk-file-btn" class="btn btn-secondary" style="margin-left: 10px;">Export Category to Bulk File</button>
                 <button id="manage-categories-btn" class="btn btn-secondary" style="margin-left: 10px;">Manage Categories</button>
                 <button id="delete-category-btn" class="btn btn-secondary" style="margin-left: 10px;">Delete Category Animals</button>
             </div>
@@ -294,6 +313,62 @@
                 <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px;">
                     <button id="cancel-category-btn" class="btn btn-secondary">Cancel</button>
                     <button id="save-category-btn" class="btn btn-primary">Add Category</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Files Tab -->
+    <div id="bulk-files-tab" class="tab-content">
+        <div class="input-section">
+            <h2 style="margin-bottom: 20px; color: #333;">Bulk File Management</h2>
+            
+            <div class="button-group" style="margin-bottom: 15px;">
+                <button id="check-bulk-updates-btn" class="btn btn-primary">Check for Updates</button>
+                <button id="refresh-bulk-status-btn" class="btn btn-secondary">Refresh Status</button>
+            </div>
+
+            <div id="bulk-files-status-container" style="margin-top: 20px;">
+                <div class="placeholder">
+                    <p>Click "Check for Updates" to view available bulk files</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk File Import Dialog -->
+    <div id="bulk-file-import-dialog" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">Import Bulk File</h2>
+                <button id="close-bulk-import-dialog-btn">✕ Close</button>
+            </div>
+            <div id="bulk-file-import-content">
+                <!-- Content will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk File Export Dialog -->
+    <div id="bulk-file-export-dialog" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #ddd;">
+                <h2 style="margin: 0;" id="bulk-file-export-title">Export to Bulk File</h2>
+                <button id="close-bulk-file-export-dialog-btn">✕ Close</button>
+            </div>
+            <div style="margin-top: 20px;">
+                <label for="bulk-export-version" style="display: block; margin-bottom: 8px; font-weight: bold;">Version (e.g., 1.0.0):</label>
+                <input type="text" id="bulk-export-version" placeholder="1.0.0" style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 15px;">
+                
+                <label for="bulk-export-type" style="display: block; margin-bottom: 8px; font-weight: bold;">Type/Name (e.g., recommended-sires):</label>
+                <input type="text" id="bulk-export-type" placeholder="bulk-file" style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 15px;">
+                
+                <label for="bulk-export-description" style="display: block; margin-bottom: 8px; font-weight: bold;">Description (optional):</label>
+                <input type="text" id="bulk-export-description" placeholder="Optional description" style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 20px;">
+                
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button id="cancel-bulk-file-export-btn" class="btn btn-secondary">Cancel</button>
+                    <button id="confirm-bulk-file-export-btn" class="btn btn-primary">Export</button>
                 </div>
             </div>
         </div>

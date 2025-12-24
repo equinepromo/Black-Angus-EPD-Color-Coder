@@ -73,6 +73,7 @@ function getTraitWeight(trait) {
 
 // Band definitions
 const BANDS = {
+  BLACK: 'BLACK',
   DARK_GREEN: 'DARK_GREEN',
   GREEN: 'GREEN',
   LIGHT_GREEN: 'LIGHT_GREEN',
@@ -84,6 +85,7 @@ const BANDS = {
 
 // Color to band mapping
 const COLOR_TO_BAND = {
+  '#000000': BANDS.BLACK,
   '#006400': BANDS.DARK_GREEN,
   '#32CD32': BANDS.GREEN,
   '#90EE90': BANDS.LIGHT_GREEN,
@@ -96,6 +98,7 @@ const COLOR_TO_BAND = {
 
 // Color rank (lower is better)
 const COLOR_RANK = {
+  [BANDS.BLACK]: -1,
   [BANDS.DARK_GREEN]: 0,
   [BANDS.GREEN]: 1,
   [BANDS.LIGHT_GREEN]: 2,
@@ -107,6 +110,7 @@ const COLOR_RANK = {
 
 // Color goodness (higher is better)
 const COLOR_GOODNESS = {
+  [BANDS.BLACK]: 4,
   [BANDS.DARK_GREEN]: 3,
   [BANDS.GREEN]: 2,
   [BANDS.LIGHT_GREEN]: 1,

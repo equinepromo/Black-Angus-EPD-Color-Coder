@@ -11,6 +11,8 @@ const cacheCleanup = require('./cache-cleanup');
 const licenseManager = require('./license-manager');
 const updateManager = require('./update-manager');
 const matingRanker = require('./mating-ranker');
+const bulkFileManager = require('./bulk-file-manager');
+const bulkFileProcessor = require('./bulk-file-processor');
 
 let mainWindow;
 let scrapingQueue = [];
@@ -275,6 +277,24 @@ app.whenReady().then(async () => {
   // Initialize update manager after window is created
   updateManager.initialize(mainWindow);
 
+  // Check for bulk file updates on startup (after a short delay to let UI load)
+  setTimeout(async () => {
+    try {
+      // Check if auto-update is enabled (can be made configurable later)
+      // For now, check for updates automatically
+      const pendingUpdates = await bulkFileManager.checkForUpdates();
+      if (pendingUpdates.success && pendingUpdates.pendingUpdates && pendingUpdates.pendingUpdates.length > 0) {
+        // Notify renderer process about pending updates
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          // Send IPC message to renderer
+          mainWindow.webContents.send('bulk-file-updates-available', pendingUpdates);
+        }
+      }
+    } catch (error) {
+      console.error('[MAIN] Error checking for bulk file updates on startup:', error);
+    }
+  }, 3000); // Wait 3 seconds after app start
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -328,10 +348,150 @@ ipcMain.handle('delete-cached-animal', async (event, registrationNumber) => {
   return cacheUtil.deleteCachedAnimal(registrationNumber);
 });
 
-// Update animal category
+// Update animal category (backward compatibility)
 ipcMain.handle('update-animal-category', async (event, registrationNumber, category) => {
   console.log('[MAIN] update-animal-category called for:', registrationNumber, 'to category:', category);
   return cacheUtil.updateAnimalCategory(registrationNumber, category);
+});
+
+// Update animal categories (multi-category support)
+ipcMain.handle('update-animal-categories', async (event, registrationNumber, categories, mode) => {
+  console.log('[MAIN] update-animal-categories called for:', registrationNumber, 'categories:', categories, 'mode:', mode);
+  return cacheUtil.updateAnimalCategories(registrationNumber, categories, mode);
+});
+
+// Check for bulk file updates
+ipcMain.handle('check-bulk-file-updates', async (event) => {
+  console.log('[MAIN] check-bulk-file-updates called');
+  return await bulkFileManager.checkForUpdates();
+});
+
+// Get pending updates
+ipcMain.handle('get-pending-updates', async (event) => {
+  console.log('[MAIN] get-pending-updates called');
+  return await bulkFileManager.getPendingUpdates();
+});
+
+// Get bulk file status
+ipcMain.handle('get-bulk-file-status', async (event) => {
+  console.log('[MAIN] get-bulk-file-status called');
+  return await bulkFileManager.getBulkFileStatus();
+});
+
+// Import bulk file
+ipcMain.handle('import-bulk-file', async (event, bulkFileId, url, options) => {
+  console.log('[MAIN] import-bulk-file called for:', bulkFileId);
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  // Emit progress updates
+  const emitProgress = (progress, total, message) => {
+    event.sender.send('bulk-file-progress', { progress, total, message });
+  };
+  
+  return await bulkFileManager.importBulkFile(bulkFileId, url, options || {}, emitProgress);
+});
+
+// Process local bulk file
+ipcMain.handle('process-bulk-file', async (event, filePath, options) => {
+  console.log('[MAIN] process-bulk-file called for:', filePath);
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  // Emit progress updates
+  const emitProgress = (processed, total, current) => {
+    const progress = Math.floor((processed / total) * 100);
+    event.sender.send('bulk-file-progress', { progress, total, message: `Processing animal ${processed} of ${total}...` });
+  };
+  
+  return bulkFileProcessor.processBulkFile(filePath, options || {}, emitProgress);
+});
+
+// Ignore bulk file update
+ipcMain.handle('ignore-bulk-file-update', async (event, bulkFileId, version, permanent) => {
+  console.log('[MAIN] ignore-bulk-file-update called for:', bulkFileId, 'version:', version, 'permanent:', permanent);
+  bulkFileManager.ignoreBulkFileUpdate(bulkFileId, version, permanent || false);
+  return { success: true };
+});
+
+// Get ignored updates
+ipcMain.handle('get-ignored-updates', async (event) => {
+  console.log('[MAIN] get-ignored-updates called');
+  return { success: true, ignoredUpdates: bulkFileManager.getIgnoredUpdates() };
+});
+
+// Export animals to bulk file
+ipcMain.handle('export-animals-to-bulk-file', async (event, animals, options) => {
+  console.log('[MAIN] export-animals-to-bulk-file called for', animals.length, 'animals');
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+
+  try {
+    // Load full animal data from cache
+    const animalsWithData = [];
+    for (const animal of animals) {
+      const registrationNumber = animal.registrationNumber || animal.regNum;
+      if (!registrationNumber) continue;
+
+      const cacheKey = `epd_${registrationNumber}`;
+      const cached = cacheUtil.loadCache(cacheKey);
+      
+      if (cached && cached.data) {
+        // Get categories (support both old and new format)
+        const categories = cacheUtil.getCategoriesFromCached(cached);
+        
+        animalsWithData.push({
+          registrationNumber,
+          data: cached.data,
+          cachedAt: cached.cachedAt,
+          categories,
+          category: categories[0] || 'My Herd'
+        });
+      }
+    }
+
+    if (animalsWithData.length === 0) {
+      return { success: false, error: 'No valid animal data found to export' };
+    }
+
+    // Create bulk file structure
+    const bulkFile = bulkFileProcessor.createBulkFileFromAnimals(animalsWithData, options);
+
+    // Show save dialog
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Bulk File',
+      defaultPath: options.filename || `bulk-file-${Date.now()}.json`,
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (canceled || !filePath) {
+      return { success: false, error: 'Save cancelled' };
+    }
+
+    // Write bulk file
+    fs.writeFileSync(filePath, JSON.stringify(bulkFile, null, 2), 'utf8');
+
+    console.log(`[MAIN] Exported ${animalsWithData.length} animals to bulk file: ${filePath}`);
+    return { success: true, path: filePath, animalCount: animalsWithData.length };
+  } catch (error) {
+    console.error('[MAIN] Error exporting animals to bulk file:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Delete animals by category

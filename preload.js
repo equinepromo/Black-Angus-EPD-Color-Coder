@@ -30,6 +30,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteCategory: (categoryName) => ipcRenderer.invoke('delete-category', categoryName),
   getPercentileData: (animalType) => ipcRenderer.invoke('get-percentile-data', animalType),
   scoreAnimal: (epdValues, animalType, gateTraits) => ipcRenderer.invoke('score-animal', { epdValues, animalType, gateTraits }),
+  // Bulk file APIs
+  checkBulkFileUpdates: () => ipcRenderer.invoke('check-bulk-file-updates'),
+  getPendingUpdates: () => ipcRenderer.invoke('get-pending-updates'),
+  getBulkFileStatus: () => ipcRenderer.invoke('get-bulk-file-status'),
+  importBulkFile: (bulkFileId, url, options) => ipcRenderer.invoke('import-bulk-file', bulkFileId, url, options),
+  processBulkFile: (filePath, options) => ipcRenderer.invoke('process-bulk-file', filePath, options),
+  ignoreBulkFileUpdate: (bulkFileId, version, permanent) => ipcRenderer.invoke('ignore-bulk-file-update', bulkFileId, version, permanent),
+  getIgnoredUpdates: () => ipcRenderer.invoke('get-ignored-updates'),
+  updateAnimalCategories: (registrationNumber, categories, mode) => ipcRenderer.invoke('update-animal-categories', registrationNumber, categories, mode),
+  onBulkFileProgress: (callback) => {
+    ipcRenderer.on('bulk-file-progress', (event, data) => callback(data));
+  },
   // Update APIs
   checkForUpdates: (showDialog) => ipcRenderer.invoke('check-for-updates', showDialog),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
@@ -49,6 +61,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onUpdateDownloaded: (callback) => {
     ipcRenderer.on('update-downloaded', (event, data) => callback(data));
-  }
+  },
+  onBulkFileUpdatesAvailable: (callback) => {
+    ipcRenderer.on('bulk-file-updates-available', (event, data) => callback(data));
+  },
+  // Export animals to bulk file
+  exportAnimalsToBulkFile: (animals, options) => ipcRenderer.invoke('export-animals-to-bulk-file', animals, options)
 });
 
