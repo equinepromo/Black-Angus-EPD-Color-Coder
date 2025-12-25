@@ -326,6 +326,7 @@
             <div class="button-group" style="margin-bottom: 15px;">
                 <button id="check-bulk-updates-btn" class="btn btn-primary">Check for Updates</button>
                 <button id="refresh-bulk-status-btn" class="btn btn-secondary">Refresh Status</button>
+                <button id="import-external-data-btn" class="btn btn-primary">Import External Data</button>
             </div>
 
             <div id="bulk-files-status-container" style="margin-top: 20px;">
@@ -369,6 +370,82 @@
                 <div style="display: flex; justify-content: flex-end; gap: 10px;">
                     <button id="cancel-bulk-file-export-btn" class="btn btn-secondary">Cancel</button>
                     <button id="confirm-bulk-file-export-btn" class="btn btn-primary">Export</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- External Data Import Dialog -->
+    <div id="external-data-import-dialog" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 90%; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #ddd;">
+                <h2 style="margin: 0;">Import External Data</h2>
+                <button id="close-external-import-dialog-btn">✕ Close</button>
+            </div>
+            <div id="external-import-content">
+                <!-- Step 1: File Selection -->
+                <div id="external-import-step1" style="display: block;">
+                    <p style="margin-bottom: 15px;">Select an Excel (.xlsx), CSV (.csv), or text file (.txt) to import:</p>
+                    <button id="select-external-file-btn" class="btn btn-primary">Select File</button>
+                    <div id="selected-file-info" style="margin-top: 15px; padding: 10px; background-color: #f5f5f5; border-radius: 4px; display: none;">
+                        <strong>Selected:</strong> <span id="selected-file-name"></span>
+                        <br><small id="selected-file-details"></small>
+                    </div>
+                </div>
+
+                <!-- Step 2: Column Mapping -->
+                <div id="external-import-step2" style="display: none; margin-top: 20px;">
+                    <h3 style="margin-bottom: 15px;">Column Mapping</h3>
+                    <p style="margin-bottom: 15px; color: #666; font-size: 0.9em;">
+                        Map your file columns to the bulk file format. Required fields are marked with *.
+                    </p>
+                    <div id="column-mapping-container" style="margin-bottom: 20px;">
+                        <!-- Column mappings will be populated here -->
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button id="auto-detect-mappings-btn" class="btn btn-secondary">Auto-Detect Mappings</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Preview -->
+                <div id="external-import-step3" style="display: none; margin-top: 20px;">
+                    <h3 style="margin-bottom: 15px;">Preview</h3>
+                    <div id="preview-container" style="overflow-x: auto; max-height: 400px; border: 1px solid #ddd; border-radius: 4px;">
+                        <!-- Preview table will be shown here -->
+                    </div>
+                </div>
+
+                <!-- Step 4: Metadata -->
+                <div id="external-import-step4" style="display: none; margin-top: 20px;">
+                    <h3 style="margin-bottom: 15px;">Bulk File Metadata</h3>
+                    <div style="margin-bottom: 15px;">
+                        <label for="external-import-version" style="display: block; margin-bottom: 8px; font-weight: bold;">Version * (e.g., 1.0.0):</label>
+                        <input type="text" id="external-import-version" placeholder="1.0.0" style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label for="external-import-type" style="display: block; margin-bottom: 8px; font-weight: bold;">Type/Name * (e.g., recommended-sires):</label>
+                        <input type="text" id="external-import-type" placeholder="bulk-file" style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label for="external-import-category" style="display: block; margin-bottom: 8px; font-weight: bold;">Category:</label>
+                        <select id="external-import-category" style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+                            <option value="My Herd">My Herd</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <label for="external-import-description" style="display: block; margin-bottom: 8px; font-weight: bold;">Description (optional):</label>
+                        <input type="text" id="external-import-description" placeholder="Optional description" style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+                    </div>
+                </div>
+
+                <!-- Navigation and Action Buttons -->
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                    <button id="external-import-prev-btn" class="btn btn-secondary" style="display: none;">Previous</button>
+                    <div style="display: flex; gap: 10px; margin-left: auto;">
+                        <button id="external-import-cancel-btn" class="btn btn-secondary">Cancel</button>
+                        <button id="external-import-next-btn" class="btn btn-primary" style="display: none;">Next</button>
+                        <button id="external-import-convert-btn" class="btn btn-primary" style="display: none;">Convert & Save</button>
+                    </div>
                 </div>
             </div>
         </div>

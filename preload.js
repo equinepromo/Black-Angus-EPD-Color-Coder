@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteCategory: (categoryName) => ipcRenderer.invoke('delete-category', categoryName),
   getPercentileData: (animalType) => ipcRenderer.invoke('get-percentile-data', animalType),
   scoreAnimal: (epdValues, animalType, gateTraits) => ipcRenderer.invoke('score-animal', { epdValues, animalType, gateTraits }),
+  calculatePercentileRanks: (epdValues, animalType, registrationNumber, saveToCache) => ipcRenderer.invoke('calculate-percentile-ranks', { epdValues, animalType, registrationNumber, saveToCache }),
   // Bulk file APIs
   checkBulkFileUpdates: () => ipcRenderer.invoke('check-bulk-file-updates'),
   getPendingUpdates: () => ipcRenderer.invoke('get-pending-updates'),
@@ -66,6 +67,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('bulk-file-updates-available', (event, data) => callback(data));
   },
   // Export animals to bulk file
-  exportAnimalsToBulkFile: (animals, options) => ipcRenderer.invoke('export-animals-to-bulk-file', animals, options)
+  exportAnimalsToBulkFile: (animals, options) => ipcRenderer.invoke('export-animals-to-bulk-file', animals, options),
+  // External data import APIs
+  showExternalFilePicker: () => ipcRenderer.invoke('show-external-file-picker'),
+  parseExternalFile: (filePath) => ipcRenderer.invoke('parse-external-file', filePath),
+  detectColumnMappings: (headers, sampleRows) => ipcRenderer.invoke('detect-column-mappings', headers, sampleRows),
+  convertExternalDataToBulkFile: (filePath, columnMappings, metadata) => ipcRenderer.invoke('convert-external-data-to-bulk-file', filePath, columnMappings, metadata)
 });
 

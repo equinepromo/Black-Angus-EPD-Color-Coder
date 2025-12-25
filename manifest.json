@@ -1,0 +1,27 @@
+{
+  "lastUpdated": "2025-12-25T00:20:56.477Z",
+  "bulkFiles": [
+    {
+      "id": "category-recommended-sires",
+      "name": "Category Recommended Sires",
+      "version": "1.0.0",
+      "filename": "category-recommended-sires-v1.0.0.json",
+      "url": "https://scoring.westernsports.video/angus/bulk-files/category-recommended-sires-v1.0.0.json",
+      "size": 1148389,
+      "animalCount": 52,
+      "category": "Recommended Sires",
+      "description": "Bulk file: category-recommended-sires"
+    },
+    {
+      "id": "part-2",
+      "name": "Part 2",
+      "version": "1.0.0",
+      "filename": "Part 2-v1.0.0.json",
+      "url": "https://scoring.westernsports.video/angus/bulk-files/Part 2-v1.0.0.json",
+      "size": 5240081,
+      "animalCount": 1841,
+      "category": "Big List",
+      "description": "Imported from external data file"
+    }
+  ]
+}

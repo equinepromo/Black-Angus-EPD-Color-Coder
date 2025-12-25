@@ -416,15 +416,18 @@ function getCachedAnimals() {
       try {
         const filePath = path.join(cacheDir, file);
         
-        // Check if file is still valid (not expired)
-        if (!isCacheValid(filePath)) {
-          return; // Skip expired files
+        // Check if file exists and can be read
+        if (!fs.existsSync(filePath)) {
+          return; // Skip missing files
         }
 
         const cacheContent = fs.readFileSync(filePath, 'utf8');
         const cached = JSON.parse(cacheContent);
         
         if (cached && cached.data) {
+          // For herd inventory, show ALL animals regardless of expiration
+          // Expiration only matters when deciding whether to re-scrape (handled in loadCache)
+          
           // Extract registration number from filename (epd_123456.json -> 123456)
           const registrationNumber = file.replace(/^epd_/, '').replace(/\.json$/, '');
           const animalName = cached.data.animalName || null;
@@ -488,9 +491,10 @@ function getCachedAnimalsWithData() {
       try {
         const filePath = path.join(cacheDir, file);
         
-        // Check if file is still valid (not expired)
-        if (!isCacheValid(filePath)) {
-          return; // Skip expired files
+        // For herd inventory, show ALL animals regardless of expiration
+        // Expiration only matters when deciding whether to re-scrape
+        if (!fs.existsSync(filePath)) {
+          return; // Skip missing files
         }
 
         const cacheContent = fs.readFileSync(filePath, 'utf8');

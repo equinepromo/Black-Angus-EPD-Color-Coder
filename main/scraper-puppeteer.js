@@ -1,5 +1,6 @@
 const puppeteer = require('puppeteer');
 const cacheUtil = require('./cache-util');
+const percentileLookup = require('./percentile-lookup');
 
 // Helper function for delays (replaces deprecated waitForTimeout)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -288,6 +289,58 @@ async function scrapeEPD(registrationNumber, browser = null, forceRefresh = fals
     console.log('[SCRAPER] Extracting full data...');
     const data = await extractData(page, registrationNumber);
     
+    // Calculate missing percentile ranks if needed
+    if (data.epdValues && Object.keys(data.epdValues).length > 0) {
+      console.log('[SCRAPER] Checking for missing percentile ranks...');
+      const needsPercentileLookup = [];
+      const epdValuesForLookup = {};
+      
+      // Check which traits need percentile ranks
+      for (const trait in data.epdValues) {
+        const traitData = data.epdValues[trait];
+        if (traitData.epd && (!traitData.percentRank || traitData.percentRank === 'N/A' || traitData.percentRank === null)) {
+          needsPercentileLookup.push(trait);
+          epdValuesForLookup[trait] = traitData.epd;
+        }
+      }
+      
+      if (needsPercentileLookup.length > 0) {
+        console.log(`[SCRAPER] Calculating percentile ranks for ${needsPercentileLookup.length} trait(s)...`);
+        try {
+          // Determine if this is a cow or bull based on sex
+          const sex = (data.sex || '').toUpperCase();
+          const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+          
+          // Get appropriate percentile data
+          const percentileData = isCow 
+            ? await percentileLookup.fetchCowPercentileBreakdowns()
+            : await percentileLookup.fetchPercentileBreakdowns();
+          
+          // Calculate percentile ranks for missing traits
+          for (const trait of needsPercentileLookup) {
+            const epdString = epdValuesForLookup[trait];
+            const epdValue = parseFloat(epdString.replace(/^I\s*/i, '').trim());
+            
+            if (!isNaN(epdValue)) {
+              const normalizedTrait = trait.toUpperCase();
+              if (percentileData[normalizedTrait]) {
+                const estimatedRank = percentileLookup.estimatePercentileRank(normalizedTrait, epdValue, percentileData);
+                if (estimatedRank !== null) {
+                  data.epdValues[trait].percentRank = estimatedRank;
+                  console.log(`[SCRAPER] Calculated percentile rank for ${trait}: ${estimatedRank}`);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[SCRAPER] Error calculating percentile ranks:', error.message);
+          // Continue without percentile ranks - not a fatal error
+        }
+      } else {
+        console.log('[SCRAPER] All traits already have percentile ranks');
+      }
+    }
+    
     // Save to cache
     const cacheKey = `epd_${registrationNumber}`;
     cacheUtil.saveCache(cacheKey, data, category);
@@ -314,6 +367,57 @@ async function scrapeEPD(registrationNumber, browser = null, forceRefresh = fals
           if (currentUrl.includes('EpdPedDtl')) {
             console.log('[SCRAPER] Page is actually loaded! Extracting data despite error...');
             const data = await extractData(currentPage, registrationNumber);
+            
+            // Calculate missing percentile ranks if needed
+            if (data.epdValues && Object.keys(data.epdValues).length > 0) {
+              console.log('[SCRAPER] Checking for missing percentile ranks...');
+              const needsPercentileLookup = [];
+              const epdValuesForLookup = {};
+              
+              // Check which traits need percentile ranks
+              for (const trait in data.epdValues) {
+                const traitData = data.epdValues[trait];
+                if (traitData.epd && (!traitData.percentRank || traitData.percentRank === 'N/A' || traitData.percentRank === null)) {
+                  needsPercentileLookup.push(trait);
+                  epdValuesForLookup[trait] = traitData.epd;
+                }
+              }
+              
+              if (needsPercentileLookup.length > 0) {
+                console.log(`[SCRAPER] Calculating percentile ranks for ${needsPercentileLookup.length} trait(s)...`);
+                try {
+                  // Determine if this is a cow or bull based on sex
+                  const sex = (data.sex || '').toUpperCase();
+                  const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+                  
+                  // Get appropriate percentile data
+                  const percentileData = isCow 
+                    ? await percentileLookup.fetchCowPercentileBreakdowns()
+                    : await percentileLookup.fetchPercentileBreakdowns();
+                  
+                  // Calculate percentile ranks for missing traits
+                  for (const trait of needsPercentileLookup) {
+                    const epdString = epdValuesForLookup[trait];
+                    const epdValue = parseFloat(epdString.replace(/^I\s*/i, '').trim());
+                    
+                    if (!isNaN(epdValue)) {
+                      const normalizedTrait = trait.toUpperCase();
+                      if (percentileData[normalizedTrait]) {
+                        const estimatedRank = percentileLookup.estimatePercentileRank(normalizedTrait, epdValue, percentileData);
+                        if (estimatedRank !== null) {
+                          data.epdValues[trait].percentRank = estimatedRank;
+                          console.log(`[SCRAPER] Calculated percentile rank for ${trait}: ${estimatedRank}`);
+                        }
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error('[SCRAPER] Error calculating percentile ranks:', error.message);
+                  // Continue without percentile ranks - not a fatal error
+                }
+              }
+            }
+            
             // Save to cache
             const cacheKey = `epd_${registrationNumber}`;
             cacheUtil.saveCache(cacheKey, data, category);

@@ -1,36 +1,33 @@
-feat: Add scoring to Animal Entry tab, category filtering, and UI improvements
+feat: Add score to Excel exports, fix FAT formatting, and improve category filtering
 
-Animal Entry Tab Scoring:
-- Added scoring functionality to Animal Entry tab using same formula as mating scoring
-- Added Score column to results table with default sort by score (descending)
-- Scores calculated using emphasis-based weighting, penalties, and gate logic
-- Maintains existing table sorting functionality
+Excel Export Enhancements:
+- Added Score column to Excel exports (both Animal Entry and Mating Calculator)
+- Excel exports now sorted by score descending (highest to lowest) by default
+- Fixed score values not appearing in Excel export by syncing scores to scrapedData
+- Score column formatted with 2 decimal places in Excel
 
-Code Refactoring:
-- Extracted shared scoring function `scoreEpdValues()` in mating-ranker.js
-- Refactored `evaluateMating()` to use shared scoring function
-- Added IPC handler `score-animal` for scoring individual animals
-- Removed ~300 lines of duplicated scoring code from renderer
-- Improved code maintainability and consistency (DRY principle)
+FAT EPD Formatting:
+- Updated FAT EPD values to display with 3 decimal places (instead of 2) everywhere
+- Applied to: main comparison table, Excel exports, mating calculator displays, and detail modals
+- All other traits remain at 2 decimal places
 
-All Matings Category Filtering:
-- Added category selectors for sires and cows in All Matings mode
-- Defaults to "All" categories (backward compatible)
-- Filters animals by selected category before sex filtering
-- Updated `getCachedAnimalsWithData()` to include category in returned data
+Category Filtering Fix:
+- Fixed mating ranking category filtering to work with multi-category system
+- Updated filter logic to check categories array instead of single category field
+- Maintains backward compatibility with old single-category format
+- Resolves "No sires found in cache" error when using category filtering
 
-UI Improvements:
-- Removed max-width constraint on main container to support ultra-wide monitors
-- Improved gate traits checkbox layout (removed scrollable container, full-width grid)
-- Gate traits now display in responsive grid that adapts to screen width
-- Added Excel export button to All Matings results
-- Excel export includes score, gate status, and all mating data
+Documentation:
+- Added SCORING_FORMULA.md with complete mathematical formula for scoring algorithm
+- Includes all constants, step-by-step calculations, and worked examples
+- Suitable for sharing with partners and stakeholders
 
 Technical Changes:
-- Enhanced main/cache-util.js: Include category in animal data objects
-- Enhanced main/main.js: Added category filtering to rank-all-matings handler
-- Enhanced main/mating-ranker.js: Extracted scoreEpdValues() shared function
-- Enhanced preload.js: Added scoreAnimal() IPC API
-- Enhanced renderer/renderer.js: Scoring, category filtering, Excel export
-- Enhanced renderer/index.html: Category selectors, improved gate traits UI
-- Enhanced renderer/styles.css: Removed container max-width constraint
+- Enhanced main/main.js: 
+  - Added score sorting and FAT formatting to Excel export
+  - Fixed category filtering in rank-all-matings to use categories array
+- Enhanced renderer/renderer.js:
+  - Sync scores to scrapedData after calculation for Excel export
+  - Updated all FAT EPD formatting to 3 decimal places
+  - Added score to mating export data structure
+- Enhanced main/cache-util.js: Already supports categories array (no changes needed)

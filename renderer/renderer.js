@@ -658,6 +658,40 @@ async function displayResults(results) {
     return;
   }
 
+  // Calculate missing percentile ranks for cached animals (from bulk imports)
+  await Promise.all(validResults.map(async (result) => {
+    if (result.data.epdValues && result.registrationNumber) {
+      // Check if any traits are missing percentile ranks
+      const hasMissingRanks = Object.values(result.data.epdValues).some(traitData => 
+        traitData.epd && (!traitData.percentRank || traitData.percentRank === 'N/A' || traitData.percentRank === null)
+      );
+      
+      if (hasMissingRanks) {
+        // Determine animal type
+        const sex = (result.data.sex || '').toUpperCase();
+        const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+        const animalType = isCow ? 'cow' : 'bull';
+        
+        try {
+          console.log(`[UI] Calculating missing percentile ranks for ${result.registrationNumber} (${animalType})`);
+          const rankResult = await window.electronAPI.calculatePercentileRanks(
+            result.data.epdValues, 
+            animalType, 
+            result.registrationNumber, 
+            true // saveToCache = true
+          );
+          if (rankResult.success && rankResult.updated) {
+            result.data.epdValues = rankResult.epdValues;
+            console.log(`[UI] Successfully calculated and saved percentile ranks for ${result.registrationNumber}`);
+          }
+        } catch (error) {
+          console.error(`[UI] Error calculating percentile ranks:`, error);
+          // Continue without percentile ranks - not a fatal error
+        }
+      }
+    }
+  }));
+
   // Get selected gate traits (if any) for scoring
   const gateTraits = getSelectedGateTraits();
 
@@ -669,6 +703,15 @@ async function displayResults(results) {
     
     result.score = await scoreAnimal(result.data, animalType, gateTraits);
   }));
+
+  // Update scrapedData with scores so Excel export has them
+  // Map the scores from validResults back to scrapedData by matching registration numbers
+  validResults.forEach(result => {
+    const matchingScraped = scrapedData.find(s => s.registrationNumber === result.registrationNumber);
+    if (matchingScraped && result.score !== undefined) {
+      matchingScraped.score = result.score;
+    }
+  });
 
   // Get all unique traits
   const allTraits = new Set();
@@ -863,7 +906,7 @@ async function displayResults(results) {
       const traitData = result.data.epdValues[trait];
       
       if (traitData) {
-        // Format EPD to 2 decimal places
+        // Format EPD to 2 decimal places (3 for FAT)
         let epd = traitData.epd || 'N/A';
         let epdNum = null;
         if (epd !== 'N/A' && typeof epd === 'string') {
@@ -871,9 +914,10 @@ async function displayResults(results) {
           const cleanedEPD = epd.replace(/^I\s*/i, '').trim();
           epdNum = parseFloat(cleanedEPD);
           if (!isNaN(epdNum)) {
-            // Preserve sign (+ or -) and format to 2 decimals
+            // Preserve sign (+ or -) and format to 2 decimals (3 for FAT)
             const sign = epdNum >= 0 ? '+' : '';
-            epd = sign + epdNum.toFixed(2);
+            const decimals = trait === 'FAT' ? 3 : 2;
+            epd = sign + epdNum.toFixed(decimals);
           }
         }
         const rank = traitData.percentRank || 'N/A';
@@ -1471,7 +1515,7 @@ async function displayMatingResults(data, fromAllMatings = false) {
     
     row.appendChild(traitCell);
 
-    // Sire EPD (format to 2 decimal places and color code)
+    // Sire EPD (format to 2 decimal places, 3 for FAT, and color code)
     const sireCell = document.createElement('td');
     let sireDisplay = 'N/A';
     const sireEPDData = data.sire.epdValues?.[trait];
@@ -1482,7 +1526,8 @@ async function displayMatingResults(data, fromAllMatings = false) {
       const sireNum = parseFloat(cleanedEPD);
       if (!isNaN(sireNum)) {
         const sign = sireNum >= 0 ? '+' : '';
-        sireDisplay = sign + sireNum.toFixed(2);
+        const decimals = trait === 'FAT' ? 3 : 2;
+        sireDisplay = sign + sireNum.toFixed(decimals);
       } else {
         sireDisplay = calcData.sireEPD;
       }
@@ -1510,7 +1555,7 @@ async function displayMatingResults(data, fromAllMatings = false) {
     }
     row.appendChild(sireCell);
 
-    // Dam EPD (format to 2 decimal places and color code)
+    // Dam EPD (format to 2 decimal places, 3 for FAT, and color code)
     const damCell = document.createElement('td');
     let damDisplay = 'N/A';
     const damEPDData = data.dam.epdValues?.[trait];
@@ -1521,7 +1566,8 @@ async function displayMatingResults(data, fromAllMatings = false) {
       const damNum = parseFloat(cleanedEPD);
       if (!isNaN(damNum)) {
         const sign = damNum >= 0 ? '+' : '';
-        damDisplay = sign + damNum.toFixed(2);
+        const decimals = trait === 'FAT' ? 3 : 2;
+        damDisplay = sign + damNum.toFixed(decimals);
       } else {
         damDisplay = calcData.damEPD;
       }
@@ -1551,14 +1597,15 @@ async function displayMatingResults(data, fromAllMatings = false) {
 
     // Expected EPD (color-coded based on estimated percentile rank)
     const expectedCell = document.createElement('td');
-    // Format EPD value to 2 decimal places
+    // Format EPD value to 2 decimal places (3 for FAT)
     let epdDisplay = 'N/A';
     if (calcData.epd && calcData.epd !== 'N/A' && typeof calcData.epd === 'string') {
       const cleanedEPD = calcData.epd.replace(/^I\s*/i, '').trim();
       const epdNum = parseFloat(cleanedEPD);
       if (!isNaN(epdNum)) {
         const sign = epdNum >= 0 ? '+' : '';
-        epdDisplay = sign + epdNum.toFixed(2);
+        const decimals = trait === 'FAT' ? 3 : 2;
+        epdDisplay = sign + epdNum.toFixed(decimals);
       } else {
         epdDisplay = calcData.epd;
       }
@@ -1729,12 +1776,14 @@ function displayAllMatingsResults(data) {
       const exportData = filteredMatings.map(mating => ({
         success: true,
         registrationNumber: `${mating.cowId} × ${mating.sireId}`,
+        score: typeof mating.score === 'number' ? mating.score : (mating.score ? parseFloat(mating.score) : 0), // Score at top level for Excel export
         data: {
           animalName: `${mating.cowName} × ${mating.sireName}`,
           epdValues: Object.keys(mating.traitResults || {}).reduce((acc, trait) => {
             const result = mating.traitResults[trait];
+            const decimals = trait === 'FAT' ? 3 : 2;
             acc[trait] = {
-              epd: result.calfEpd?.toFixed(2) || 'N/A',
+              epd: result.calfEpd !== null && result.calfEpd !== undefined ? result.calfEpd.toFixed(decimals) : 'N/A',
               percentRank: result.calfPercentile || 'N/A'
             };
             return acc;
@@ -1742,7 +1791,7 @@ function displayAllMatingsResults(data) {
           additionalInfo: {
             sire: mating.sireName || mating.sireId,
             dam: mating.cowName || mating.cowId,
-            score: mating.score?.toFixed(2) || '0.00',
+            score: mating.score?.toFixed(2) || '0.00', // Keep as string in additionalInfo for reference
             passedGate: mating.passedGate ? 'Yes' : 'No',
             numBelowLightGreen: mating.numBelowLightGreenAllTraits || 0,
             improvedEmphasisTraits: mating.improvedEmphasisTraitsCount || 0
@@ -2036,10 +2085,11 @@ function displayAllMatingsResults(data) {
         const traitResult = mating.traitResults[trait];
         
         if (traitResult) {
-          // Show EPD value and percentile
+          // Show EPD value and percentile (3 decimals for FAT)
+          const decimals = trait === 'FAT' ? 3 : 2;
           const epdDisplay = traitResult.calfEpd >= 0 
-            ? `+${traitResult.calfEpd.toFixed(2)}` 
-            : traitResult.calfEpd.toFixed(2);
+            ? `+${traitResult.calfEpd.toFixed(decimals)}` 
+            : traitResult.calfEpd.toFixed(decimals);
           const percentileDisplay = traitResult.calfPercentile !== null 
             ? ` (${traitResult.calfPercentile}%)` 
             : '';
@@ -2106,8 +2156,9 @@ function showMatingDetail(mating) {
   // Convert traitResults to calculatedEPDs format
   Object.keys(mating.traitResults).forEach(trait => {
     const result = mating.traitResults[trait];
+    const decimals = trait === 'FAT' ? 3 : 2;
     displayData.calculatedEPDs[trait] = {
-      epd: result.calfEpd >= 0 ? `+${result.calfEpd.toFixed(2)}` : result.calfEpd.toFixed(2),
+      epd: result.calfEpd >= 0 ? `+${result.calfEpd.toFixed(decimals)}` : result.calfEpd.toFixed(decimals),
       estimatedPercentileRank: result.calfPercentile,
       sireEPD: mating.sireData?.epdValues?.[trait]?.epd || 'N/A',
       damEPD: mating.cowData?.epdValues?.[trait]?.epd || 'N/A'
@@ -3319,8 +3370,23 @@ async function showAnimalDetailsModal(animal) {
         
         sortedTraits.forEach(trait => {
           const epdData = animalData.epdValues[trait];
-          const epd = epdData?.epd || 'N/A';
+          let epd = epdData?.epd || 'N/A';
           const percentRank = epdData?.percentRank || 'N/A';
+          
+          // Format EPD value (3 decimals for FAT, 2 for others)
+          if (epd !== 'N/A' && typeof epd === 'string') {
+            const cleanedEPD = epd.replace(/^I\s*/i, '').trim();
+            const epdNum = parseFloat(cleanedEPD);
+            if (!isNaN(epdNum)) {
+              const decimals = trait === 'FAT' ? 3 : 2;
+              const sign = epdNum >= 0 ? '+' : '';
+              epd = sign + epdNum.toFixed(decimals);
+            }
+          } else if (typeof epd === 'number') {
+            const decimals = trait === 'FAT' ? 3 : 2;
+            const sign = epd >= 0 ? '+' : '';
+            epd = sign + epd.toFixed(decimals);
+          }
           
           // Get color coding
           let bgColor = '#FFFFFF';
@@ -3602,18 +3668,28 @@ function displayBulkFileStatus(status) {
     return;
   }
 
+  console.log('[UI] Displaying bulk file status:', status.bulkFiles.length, 'files');
+  
   let html = '<div style="display: grid; gap: 15px;">';
   
-  status.bulkFiles.forEach(bf => {
+  status.bulkFiles.forEach((bf, index) => {
+    console.log(`[UI] Processing bulk file ${index + 1}/${status.bulkFiles.length}:`, bf.id, bf.name);
     const statusBadge = getStatusBadge(bf.status);
     const versionInfo = bf.localVersion ? `v${bf.localVersion} → v${bf.manifestVersion}` : `v${bf.manifestVersion}`;
+    
+    // Escape HTML in user-provided content to prevent injection
+    const safeName = (bf.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const safeDescription = (bf.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const safeId = (bf.id || '').replace(/"/g, '&quot;');
+    // URL should already be encoded, but ensure it's safe for HTML attributes
+    const safeUrl = (bf.url || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     
     html += `
       <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
           <div>
-            <h3 style="margin: 0 0 5px 0;">${bf.name}</h3>
-            <p style="margin: 0; color: #666; font-size: 0.9em;">${bf.description || ''}</p>
+            <h3 style="margin: 0 0 5px 0;">${safeName}</h3>
+            <p style="margin: 0; color: #666; font-size: 0.9em;">${safeDescription}</p>
           </div>
           ${statusBadge}
         </div>
@@ -3623,11 +3699,11 @@ function displayBulkFileStatus(status) {
           ${bf.lastProcessed ? `<div>Last Imported: ${new Date(bf.lastProcessed).toLocaleString()}</div>` : ''}
         </div>
         <div style="margin-top: 15px;">
-          <button class="btn btn-primary bulk-file-import-btn" data-bulk-file-id="${bf.id}" data-url="${bf.url || ''}" style="margin-right: 10px;" ${!bf.url ? 'disabled title="URL not available - check for updates first"' : ''}>
+          <button class="btn btn-primary bulk-file-import-btn" data-bulk-file-id="${safeId}" data-url="${safeUrl}" style="margin-right: 10px;" ${!bf.url ? 'disabled title="URL not available - check for updates first"' : ''}>
             ${bf.status === 'not-imported' ? 'Import' : bf.status === 'update-available' ? 'Update' : 'Re-import'}
           </button>
           ${bf.status === 'update-available' && !bf.ignored?.permanent ? `
-            <button class="btn btn-secondary bulk-file-ignore-btn" data-bulk-file-id="${bf.id}" data-version="${bf.manifestVersion}">
+            <button class="btn btn-secondary bulk-file-ignore-btn" data-bulk-file-id="${safeId}" data-version="${bf.manifestVersion}">
               Ignore Update
             </button>
           ` : ''}
@@ -3637,6 +3713,7 @@ function displayBulkFileStatus(status) {
   });
   
   html += '</div>';
+  console.log('[UI] Generated HTML length:', html.length, 'characters');
   container.innerHTML = html;
   
   // Attach event listeners
@@ -3880,6 +3957,483 @@ function showBulkFileUpdatesNotification(updates) {
   
   notification.style.display = 'block';
 }
+
+// ==================== External Data Import ====================
+
+let externalImportState = {
+  currentStep: 1,
+  filePath: null,
+  headers: [],
+  sampleRows: [],
+  totalRows: 0,
+  columnMappings: {
+    registrationNumber: null,
+    animalName: null,
+    sex: null,
+    epdTraits: {},
+    percentRanks: {}
+  },
+  autoDetectedMappings: null
+};
+
+// Open external data import dialog
+async function importExternalData() {
+  const dialog = document.getElementById('external-data-import-dialog');
+  if (!dialog) return;
+
+  // Reset state
+  externalImportState = {
+    currentStep: 1,
+    filePath: null,
+    headers: [],
+    sampleRows: [],
+    totalRows: 0,
+    columnMappings: {
+      registrationNumber: null,
+      animalName: null,
+      sex: null,
+      epdTraits: {},
+      percentRanks: {}
+    },
+    autoDetectedMappings: null
+  };
+
+  // Show step 1, hide others
+  showExternalImportStep(1);
+  
+  // Load categories for category dropdown
+  try {
+    const categories = await window.electronAPI.getAvailableCategories();
+    const categorySelect = document.getElementById('external-import-category');
+    if (categorySelect && categories && categories.length > 0) {
+      categorySelect.innerHTML = categories.map(cat => 
+        `<option value="${cat}">${cat}</option>`
+      ).join('');
+    }
+  } catch (error) {
+    console.error('Error loading categories:', error);
+  }
+
+  dialog.style.display = 'block';
+}
+
+// Show specific step
+function showExternalImportStep(step) {
+  externalImportState.currentStep = step;
+  
+  // Hide all steps
+  for (let i = 1; i <= 4; i++) {
+    const stepDiv = document.getElementById(`external-import-step${i}`);
+    if (stepDiv) {
+      stepDiv.style.display = 'none';
+    }
+  }
+
+  // Show current step
+  const currentStepDiv = document.getElementById(`external-import-step${step}`);
+  if (currentStepDiv) {
+    currentStepDiv.style.display = 'block';
+  }
+
+  // Update navigation buttons
+  const prevBtn = document.getElementById('external-import-prev-btn');
+  const nextBtn = document.getElementById('external-import-next-btn');
+  const convertBtn = document.getElementById('external-import-convert-btn');
+
+  if (prevBtn) {
+    prevBtn.style.display = step > 1 ? 'block' : 'none';
+  }
+  if (nextBtn) {
+    nextBtn.style.display = step < 4 ? 'block' : 'none';
+  }
+  if (convertBtn) {
+    convertBtn.style.display = step === 4 ? 'block' : 'none';
+  }
+}
+
+// Select external file
+async function selectExternalFile() {
+  try {
+    // Show file picker dialog
+    const pickerResult = await window.electronAPI.showExternalFilePicker();
+    
+    if (!pickerResult.success) {
+      if (pickerResult.canceled) {
+        return; // User cancelled
+      }
+      alert(`Error selecting file: ${pickerResult.error}`);
+      return;
+    }
+
+    const filePath = pickerResult.filePath;
+    externalImportState.filePath = filePath;
+
+    // Show file info
+    const fileInfo = document.getElementById('selected-file-info');
+    const fileName = document.getElementById('selected-file-name');
+    const fileDetails = document.getElementById('selected-file-details');
+    
+    if (fileInfo && fileName && fileDetails) {
+      const pathParts = filePath.split(/[/\\]/);
+      fileName.textContent = pathParts[pathParts.length - 1];
+      fileDetails.textContent = `Path: ${filePath}`;
+      fileInfo.style.display = 'block';
+    }
+
+    // Parse file
+    try {
+      const result = await window.electronAPI.parseExternalFile(filePath);
+      if (result.success) {
+        externalImportState.headers = result.headers;
+        externalImportState.sampleRows = result.sampleRows;
+        externalImportState.totalRows = result.totalRows;
+
+        // Auto-detect mappings
+        const mappingResult = await window.electronAPI.detectColumnMappings(result.headers, result.sampleRows);
+        if (mappingResult.success) {
+          externalImportState.autoDetectedMappings = mappingResult.mappings;
+          externalImportState.columnMappings = JSON.parse(JSON.stringify(mappingResult.mappings));
+        }
+
+        // Move to step 2
+        showExternalImportStep(2);
+        showColumnMappingDialog();
+      } else {
+        alert(`Error parsing file: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error parsing file:', error);
+      alert(`Error parsing file: ${error.message}`);
+    }
+  } catch (error) {
+    console.error('Error selecting file:', error);
+    alert(`Error selecting file: ${error.message}`);
+  }
+}
+
+// Show column mapping dialog
+function showColumnMappingDialog() {
+  const container = document.getElementById('column-mapping-container');
+  if (!container) return;
+
+  const mappings = externalImportState.columnMappings;
+  const headers = externalImportState.headers;
+
+  let html = '<div style="display: grid; gap: 10px;">';
+
+  // Registration Number (required)
+  html += createMappingRow('Registration Number *', 'registrationNumber', headers, mappings.registrationNumber);
+
+  // Animal Name
+  html += createMappingRow('Animal Name', 'animalName', headers, mappings.animalName);
+
+  // Sex
+  html += createMappingRow('Sex', 'sex', headers, mappings.sex);
+
+  // EPD Traits
+  html += '<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;"><strong>EPD Traits:</strong></div>';
+  const epdTraits = ['BW', 'WW', 'YW', 'CED', 'RADG', 'DMI', 'YH', 'SC', 'DOC', 'CLAW', 'ANGLE', 'PAP', 'HS', 'HP', 'CEM', 'MILK', 'TEAT', 'UDDR', 'FL', 'MW', 'MH', '$EN', 'CW', 'MARB', 'RE', 'FAT', '$M', '$B', '$C'];
+  epdTraits.forEach(trait => {
+    html += createMappingRow(`EPD: ${trait}`, `epd_${trait}`, headers, mappings.epdTraits[trait] || null);
+    html += createMappingRow(`Percent Rank: ${trait}`, `pr_${trait}`, headers, mappings.percentRanks[trait] || null);
+  });
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// Create a mapping row
+function createMappingRow(label, fieldKey, headers, currentValue) {
+  let html = `<div style="display: grid; grid-template-columns: 200px 1fr; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid #eee;">`;
+  html += `<label style="font-weight: 500;">${label}:</label>`;
+  html += `<select class="column-mapping-select" data-field="${fieldKey}" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;">`;
+  html += `<option value="">-- Skip --</option>`;
+  
+  headers.forEach((header, index) => {
+    const selected = currentValue === index ? 'selected' : '';
+    html += `<option value="${index}" ${selected}>${header}</option>`;
+  });
+  
+  html += `</select></div>`;
+  return html;
+}
+
+// Update column mappings from UI
+function updateColumnMappings() {
+  const selects = document.querySelectorAll('.column-mapping-select');
+  const mappings = {
+    registrationNumber: null,
+    animalName: null,
+    sex: null,
+    epdTraits: {},
+    percentRanks: {}
+  };
+
+  selects.forEach(select => {
+    const field = select.dataset.field;
+    const value = select.value ? parseInt(select.value) : null;
+
+    if (field === 'registrationNumber') {
+      mappings.registrationNumber = value;
+    } else if (field === 'animalName') {
+      mappings.animalName = value;
+    } else if (field === 'sex') {
+      mappings.sex = value;
+    } else if (field.startsWith('epd_')) {
+      const trait = field.replace('epd_', '');
+      if (value !== null) {
+        mappings.epdTraits[trait] = value;
+      }
+    } else if (field.startsWith('pr_')) {
+      const trait = field.replace('pr_', '');
+      if (value !== null) {
+        mappings.percentRanks[trait] = value;
+      }
+    }
+  });
+
+  externalImportState.columnMappings = mappings;
+}
+
+// Auto-detect mappings
+async function autoDetectMappings() {
+  try {
+    const result = await window.electronAPI.detectColumnMappings(
+      externalImportState.headers,
+      externalImportState.sampleRows
+    );
+
+    if (result.success) {
+      externalImportState.columnMappings = JSON.parse(JSON.stringify(result.mappings));
+      externalImportState.autoDetectedMappings = JSON.parse(JSON.stringify(result.mappings));
+      showColumnMappingDialog();
+    } else {
+      alert(`Error detecting mappings: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error auto-detecting mappings:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+// Preview converted data
+async function previewConvertedData() {
+  const container = document.getElementById('preview-container');
+  if (!container) return;
+
+  // Update mappings from UI
+  updateColumnMappings();
+
+  // Validate registration number is mapped
+  if (externalImportState.columnMappings.registrationNumber === null) {
+    alert('Registration Number must be mapped. Please select a column for Registration Number.');
+    return;
+  }
+
+  // Create preview table
+  let html = '<table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">';
+  html += '<thead><tr style="background-color: #f5f5f5; position: sticky; top: 0;">';
+  html += '<th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Registration Number</th>';
+  html += '<th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Name</th>';
+  html += '<th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Sex</th>';
+  
+  // Add EPD trait columns
+  const traits = Object.keys(externalImportState.columnMappings.epdTraits).filter(t => 
+    externalImportState.columnMappings.epdTraits[t] !== null
+  );
+  traits.forEach(trait => {
+    html += `<th style="padding: 8px; border: 1px solid #ddd; text-align: left;">${trait} EPD</th>`;
+    if (externalImportState.columnMappings.percentRanks[trait]) {
+      html += `<th style="padding: 8px; border: 1px solid #ddd; text-align: left;">${trait} %Rank</th>`;
+    }
+  });
+  html += '</tr></thead><tbody>';
+
+  // Show preview of first 10 rows
+  const previewRows = externalImportState.sampleRows.slice(0, 10);
+  previewRows.forEach(row => {
+    const regNumIdx = externalImportState.columnMappings.registrationNumber;
+    const nameIdx = externalImportState.columnMappings.animalName;
+    const sexIdx = externalImportState.columnMappings.sex;
+
+    html += '<tr>';
+    html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[regNumIdx] || ''}</td>`;
+    html += `<td style="padding: 8px; border: 1px solid #ddd;">${nameIdx !== null ? (row[nameIdx] || '') : ''}</td>`;
+    html += `<td style="padding: 8px; border: 1px solid #ddd;">${sexIdx !== null ? (row[sexIdx] || '') : ''}</td>`;
+    
+    traits.forEach(trait => {
+      const traitIdx = externalImportState.columnMappings.epdTraits[trait];
+      html += `<td style="padding: 8px; border: 1px solid #ddd;">${traitIdx !== null ? (row[traitIdx] || '') : ''}</td>`;
+      const prIdx = externalImportState.columnMappings.percentRanks[trait];
+      if (prIdx !== null && prIdx !== undefined) {
+        html += `<td style="padding: 8px; border: 1px solid #ddd;">${row[prIdx] || ''}</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  html += `<p style="margin-top: 10px; color: #666; font-size: 0.9em;">Showing preview of first 10 rows. Total rows: ${externalImportState.totalRows}</p>`;
+  
+  container.innerHTML = html;
+}
+
+// Convert and save
+async function convertExternalDataToBulkFile() {
+  // Update mappings from UI
+  updateColumnMappings();
+
+  // Validate required fields
+  if (externalImportState.columnMappings.registrationNumber === null) {
+    alert('Registration Number must be mapped. Please select a column for Registration Number.');
+    return;
+  }
+
+  const versionInput = document.getElementById('external-import-version');
+  const typeInput = document.getElementById('external-import-type');
+  const categorySelect = document.getElementById('external-import-category');
+  const descriptionInput = document.getElementById('external-import-description');
+
+  if (!versionInput || !versionInput.value.trim()) {
+    alert('Version is required. Please enter a version number.');
+    return;
+  }
+
+  if (!typeInput || !typeInput.value.trim()) {
+    alert('Type/Name is required. Please enter a type/name.');
+    return;
+  }
+
+  const metadata = {
+    version: versionInput.value.trim(),
+    type: typeInput.value.trim(),
+    category: categorySelect ? categorySelect.value : 'My Herd',
+    description: descriptionInput ? descriptionInput.value.trim() : ''
+  };
+
+  try {
+    const convertBtn = document.getElementById('external-import-convert-btn');
+    if (convertBtn) {
+      convertBtn.disabled = true;
+      convertBtn.textContent = 'Converting...';
+    }
+
+    const result = await window.electronAPI.convertExternalDataToBulkFile(
+      externalImportState.filePath,
+      externalImportState.columnMappings,
+      metadata
+    );
+
+    if (result.success) {
+      alert(`Bulk file created successfully!\n\nFile: ${result.path}\nAnimals: ${result.animalCount}`);
+      
+      // Close dialog
+      const dialog = document.getElementById('external-data-import-dialog');
+      if (dialog) {
+        dialog.style.display = 'none';
+      }
+
+      // Optionally refresh bulk file status
+      if (typeof loadBulkFileStatus === 'function') {
+        loadBulkFileStatus();
+      }
+    } else {
+      alert(`Error creating bulk file: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error converting external data:', error);
+    alert(`Error: ${error.message}`);
+  } finally {
+    const convertBtn = document.getElementById('external-import-convert-btn');
+    if (convertBtn) {
+      convertBtn.disabled = false;
+      convertBtn.textContent = 'Convert & Save';
+    }
+  }
+}
+
+// Event listeners for external data import
+document.addEventListener('DOMContentLoaded', () => {
+  // Import external data button
+  const importBtn = document.getElementById('import-external-data-btn');
+  if (importBtn) {
+    importBtn.addEventListener('click', importExternalData);
+  }
+
+  // File selection
+  const selectFileBtn = document.getElementById('select-external-file-btn');
+  if (selectFileBtn) {
+    selectFileBtn.addEventListener('click', selectExternalFile);
+  }
+
+  // Auto-detect mappings
+  const autoDetectBtn = document.getElementById('auto-detect-mappings-btn');
+  if (autoDetectBtn) {
+    autoDetectBtn.addEventListener('click', autoDetectMappings);
+  }
+
+  // Navigation buttons
+  const prevBtn = document.getElementById('external-import-prev-btn');
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (externalImportState.currentStep > 1) {
+        showExternalImportStep(externalImportState.currentStep - 1);
+      }
+    });
+  }
+
+  const nextBtn = document.getElementById('external-import-next-btn');
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (externalImportState.currentStep === 2) {
+        // Validate mappings before moving to preview
+        updateColumnMappings();
+        if (externalImportState.columnMappings.registrationNumber === null) {
+          alert('Registration Number must be mapped. Please select a column for Registration Number.');
+          return;
+        }
+        previewConvertedData();
+        showExternalImportStep(3);
+      } else if (externalImportState.currentStep === 3) {
+        showExternalImportStep(4);
+      }
+    });
+  }
+
+  // Convert button
+  const convertBtn = document.getElementById('external-import-convert-btn');
+  if (convertBtn) {
+    convertBtn.addEventListener('click', convertExternalDataToBulkFile);
+  }
+
+  // Cancel/Close buttons
+  const cancelBtn = document.getElementById('external-import-cancel-btn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      const dialog = document.getElementById('external-data-import-dialog');
+      if (dialog) {
+        dialog.style.display = 'none';
+      }
+    });
+  }
+
+  const closeBtn = document.getElementById('close-external-import-dialog-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      const dialog = document.getElementById('external-data-import-dialog');
+      if (dialog) {
+        dialog.style.display = 'none';
+      }
+    });
+  }
+
+  // Update mappings when selects change
+  document.addEventListener('change', (e) => {
+    if (e.target.classList.contains('column-mapping-select')) {
+      updateColumnMappings();
+    }
+  });
+});
 
 // Event listeners for bulk file management
 document.addEventListener('DOMContentLoaded', () => {

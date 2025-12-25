@@ -13,6 +13,7 @@ const updateManager = require('./update-manager');
 const matingRanker = require('./mating-ranker');
 const bulkFileManager = require('./bulk-file-manager');
 const bulkFileProcessor = require('./bulk-file-processor');
+const externalDataParser = require('./external-data-parser');
 
 let mainWindow;
 let scrapingQueue = [];
@@ -500,6 +501,140 @@ ipcMain.handle('delete-animals-by-category', async (event, category) => {
   return cacheUtil.deleteAnimalsByCategory(category);
 });
 
+// Parse external file (Excel, CSV, text)
+ipcMain.handle('parse-external-file', async (event, filePath) => {
+  console.log('[MAIN] parse-external-file called for:', filePath);
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  try {
+    const result = await externalDataParser.parseExternalFile(filePath);
+    
+    // Return headers and sample rows (first 10 rows for preview)
+    const sampleRows = result.rows.slice(0, 10);
+    
+    return {
+      success: true,
+      headers: result.headers,
+      sampleRows: sampleRows,
+      totalRows: result.rows.length
+    };
+  } catch (error) {
+    console.error('[MAIN] Error parsing external file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Auto-detect column mappings
+ipcMain.handle('detect-column-mappings', async (event, headers, sampleRows) => {
+  console.log('[MAIN] detect-column-mappings called');
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  try {
+    const mappings = externalDataParser.autoDetectColumnMappings(headers, sampleRows);
+    return { success: true, mappings };
+  } catch (error) {
+    console.error('[MAIN] Error detecting column mappings:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Show file picker for external data import
+ipcMain.handle('show-external-file-picker', async (event) => {
+  console.log('[MAIN] show-external-file-picker called');
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select External Data File',
+      filters: [
+        { name: 'All Supported', extensions: ['xlsx', 'xls', 'csv', 'txt', 'tsv'] },
+        { name: 'Excel Files', extensions: ['xlsx', 'xls'] },
+        { name: 'CSV Files', extensions: ['csv'] },
+        { name: 'Text Files', extensions: ['txt', 'tsv'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+    
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    
+    return { success: true, filePath: filePaths[0] };
+  } catch (error) {
+    console.error('[MAIN] Error showing file picker:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Convert external data to bulk file format and save
+ipcMain.handle('convert-external-data-to-bulk-file', async (event, filePath, columnMappings, metadata) => {
+  console.log('[MAIN] convert-external-data-to-bulk-file called');
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  try {
+    // Parse the file again to get all rows
+    const parsedData = await externalDataParser.parseExternalFile(filePath);
+    
+    // Convert to bulk file format
+    const bulkFile = externalDataParser.mapToBulkFileFormat(parsedData, columnMappings, metadata);
+    
+    // Validate registration numbers are present
+    if (bulkFile.animals.length === 0) {
+      return { success: false, error: 'No valid animals found. Please check that registration numbers are mapped correctly.' };
+    }
+    
+    // Show save dialog
+    const defaultFilename = `${metadata.type || 'bulk-file'}-v${metadata.version || '1.0.0'}.json`;
+    const { canceled, filePath: savePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Bulk File',
+      defaultPath: defaultFilename,
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (canceled || !savePath) {
+      return { success: false, error: 'Save cancelled' };
+    }
+    
+    // Write bulk file
+    fs.writeFileSync(savePath, JSON.stringify(bulkFile, null, 2), 'utf8');
+    
+    console.log(`[MAIN] Converted and saved bulk file: ${savePath} with ${bulkFile.animals.length} animals`);
+    return { 
+      success: true, 
+      path: savePath, 
+      animalCount: bulkFile.animals.length,
+      bulkFile: bulkFile // Return bulk file data in case user wants to import immediately
+    };
+  } catch (error) {
+    console.error('[MAIN] Error converting external data to bulk file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Get available categories
 ipcMain.handle('get-available-categories', async (event) => {
   console.log('[MAIN] get-available-categories called');
@@ -839,10 +974,11 @@ ipcMain.handle('rank-all-matings', async (event, config) => {
       const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
       if (!isCow) return false;
       
-      // Then filter by category if specified
+      // Then filter by category if specified (check categories array)
       if (cowCategory !== null) {
-        const animalCategory = animal.category || 'My Herd';
-        return animalCategory === cowCategory;
+        // Support both new array format and old single category format
+        const animalCategories = animal.categories || (animal.category ? [animal.category] : ['My Herd']);
+        return animalCategories.includes(cowCategory);
       }
       return true; // "all" means no category filter
     });
@@ -853,10 +989,11 @@ ipcMain.handle('rank-all-matings', async (event, config) => {
       const isSire = sex === 'BULL' || sex === 'MALE' || sex === 'STEER' || sex.includes('BULL') || sex.includes('MALE');
       if (!isSire) return false;
       
-      // Then filter by category if specified
+      // Then filter by category if specified (check categories array)
       if (sireCategory !== null) {
-        const animalCategory = animal.category || 'My Herd';
-        return animalCategory === sireCategory;
+        // Support both new array format and old single category format
+        const animalCategories = animal.categories || (animal.category ? [animal.category] : ['My Herd']);
+        return animalCategories.includes(sireCategory);
       }
       return true; // "all" means no category filter
     });
@@ -1036,6 +1173,92 @@ ipcMain.handle('score-animal', async (event, { epdValues, animalType, gateTraits
   }
 });
 
+// Calculate missing percentile ranks for an animal's EPD values
+ipcMain.handle('calculate-percentile-ranks', async (event, { epdValues, animalType, registrationNumber, saveToCache = false }) => {
+  try {
+    console.log('[MAIN] calculate-percentile-ranks called for animalType:', animalType, 'saveToCache:', saveToCache);
+    
+    // Get appropriate percentile data
+    let percentileData = null;
+    if (animalType === 'cow') {
+      percentileData = await percentileLookup.fetchCowPercentileBreakdowns();
+    } else {
+      percentileData = await percentileLookup.fetchPercentileBreakdowns();
+    }
+    
+    // Build EPD values object for lookup (just the EPD strings)
+    const epdValuesForLookup = {};
+    const updatedEpdValues = { ...epdValues };
+    let hasUpdates = false;
+    
+    for (const trait in epdValues) {
+      const traitData = epdValues[trait];
+      // Only calculate if EPD exists but percentile rank is missing
+      if (traitData.epd && (!traitData.percentRank || traitData.percentRank === 'N/A' || traitData.percentRank === null)) {
+        epdValuesForLookup[trait] = traitData.epd;
+      }
+    }
+    
+    if (Object.keys(epdValuesForLookup).length === 0) {
+      // No missing percentile ranks
+      return { success: true, epdValues: updatedEpdValues, updated: false };
+    }
+    
+    // Calculate percentile ranks for missing traits
+    for (const trait in epdValuesForLookup) {
+      const epdString = epdValuesForLookup[trait];
+      // Parse EPD value (handle strings like "+1.5", "-.5", "I +1.5", etc.)
+      const cleanedEPD = epdString.replace(/^I\s*/i, '').trim();
+      const epdValue = parseFloat(cleanedEPD);
+      
+      if (!isNaN(epdValue)) {
+        const normalizedTrait = trait.toUpperCase();
+        if (percentileData[normalizedTrait]) {
+          const estimatedRank = percentileLookup.estimatePercentileRank(normalizedTrait, epdValue, percentileData);
+          if (estimatedRank !== null) {
+            updatedEpdValues[trait] = {
+              ...updatedEpdValues[trait],
+              percentRank: estimatedRank
+            };
+            hasUpdates = true;
+            console.log(`[MAIN] Calculated percentile rank for ${trait}: ${estimatedRank}`);
+          }
+        }
+      }
+    }
+    
+    // Save to cache if requested and we have updates
+    if (saveToCache && hasUpdates && registrationNumber) {
+      try {
+        const cacheKey = `epd_${registrationNumber}`;
+        const existingCache = cacheUtil.loadCache(cacheKey);
+        
+        if (existingCache && existingCache.data) {
+          // Update the EPD values in the cached data
+          existingCache.data.epdValues = updatedEpdValues;
+          
+          // Get categories from existing cache
+          const categories = cacheUtil.getCategoriesFromCached(existingCache);
+          
+          // Save updated cache
+          cacheUtil.saveCache(cacheKey, existingCache.data, categories);
+          console.log(`[MAIN] Saved updated percentile ranks to cache for ${registrationNumber}`);
+        } else {
+          console.log(`[MAIN] Could not find cache for ${registrationNumber}, skipping save`);
+        }
+      } catch (saveError) {
+        console.error('[MAIN] Error saving percentile ranks to cache:', saveError);
+        // Don't fail the whole operation if cache save fails
+      }
+    }
+    
+    return { success: true, epdValues: updatedEpdValues, updated: hasUpdates };
+  } catch (error) {
+    console.error('[MAIN] Error calculating percentile ranks:', error);
+    return { success: false, error: error.message, epdValues: epdValues, updated: false };
+  }
+});
+
 // Export to Excel
 ipcMain.handle('export-to-excel', async (event, data) => {
   console.log('[MAIN] Excel export called with', data?.length || 0, 'animals');
@@ -1043,6 +1266,13 @@ ipcMain.handle('export-to-excel', async (event, data) => {
     if (!data || !Array.isArray(data) || data.length === 0) {
       return { success: false, error: 'No data to export' };
     }
+
+    // Sort data by score descending (highest to lowest)
+    const sortedData = [...data].sort((a, b) => {
+      const scoreA = a.score !== undefined ? (typeof a.score === 'number' ? a.score : 0) : 0;
+      const scoreB = b.score !== undefined ? (typeof b.score === 'number' ? b.score : 0) : 0;
+      return scoreB - scoreA; // Descending order
+    });
 
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
       title: 'Save Excel File',
@@ -1093,7 +1323,7 @@ ipcMain.handle('export-to-excel', async (event, data) => {
 
     // Get all unique traits from all animals
     const allTraits = new Set();
-    data.forEach(animal => {
+    sortedData.forEach(animal => {
       if (animal.success && animal.data && animal.data.epdValues) {
         Object.keys(animal.data.epdValues).forEach(trait => allTraits.add(trait));
       }
@@ -1128,7 +1358,7 @@ ipcMain.handle('export-to-excel', async (event, data) => {
     // Add headers for EPD columns and percent rank columns
     const epdHeaders = sortedTraits.map(trait => trait);
     const percentRankHeaders = sortedTraits.map(trait => `${trait} %Rank`);
-    const headers = ['Registration Number', ...additionalInfoColumns, ...epdHeaders, ...percentRankHeaders];
+    const headers = ['Registration Number', 'Score', ...additionalInfoColumns, ...epdHeaders, ...percentRankHeaders];
     worksheet.addRow(headers);
 
     // Style header row
@@ -1142,7 +1372,7 @@ ipcMain.handle('export-to-excel', async (event, data) => {
     headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
 
     // Add data rows
-    data.forEach(animal => {
+    sortedData.forEach(animal => {
       if (!animal.success || !animal.data) return;
 
       // Parse birth date for Excel (format: MM/DD/YYYY)
@@ -1167,9 +1397,13 @@ ipcMain.handle('export-to-excel', async (event, data) => {
         }
       }
 
-      // Build row with registration number and additional info
+      // Get score value (default to 0 if not present)
+      const scoreValue = animal.score !== undefined ? (typeof animal.score === 'number' ? animal.score : 0) : 0;
+
+      // Build row with registration number, score, and additional info
       const row = [
         animal.registrationNumber || '',
+        scoreValue, // Score
         animal.data.animalName || '', // Name
         animal.data.additionalInfo?.sire || '', // Sire
         animal.data.additionalInfo?.dam || '', // Dam
@@ -1223,26 +1457,33 @@ ipcMain.handle('export-to-excel', async (event, data) => {
 
       const dataRow = worksheet.addRow(row);
 
-      // Format BD column (column 6, 1-based) as date
-      const bdCell = dataRow.getCell(6); // BD is the 6th column (after Registration Number)
+      // Format Score column (column 2, 1-based) as number with 2 decimal places
+      const scoreCell = dataRow.getCell(2); // Score is the 2nd column (after Registration Number)
+      if (typeof scoreCell.value === 'number') {
+        scoreCell.numFmt = '0.00';
+      }
+
+      // Format BD column (column 8, 1-based) as date
+      // Columns: Reg Num (1), Score (2), Name (3), Sire (4), Dam (5), MGS (6), BD (7), Tattoo (8)
+      const bdCell = dataRow.getCell(7); // BD is the 7th column
       if (bdCell.value instanceof Date) {
         bdCell.numFmt = 'mm/dd/yyyy';
       }
 
-      // Format EPD cells as numbers with 2 decimal places
+      // Format EPD cells as numbers with 2 decimal places (3 for FAT)
       sortedTraits.forEach((trait, traitIdx) => {
-        // +8 for: reg num (1) + Name, Sire, Dam, MGS, BD, Tattoo (6) + trait index (1)
-        const cell = dataRow.getCell(traitIdx + 8);
-        // If cell contains a number, format it with 2 decimal places
+        // +9 for: reg num (1) + Score (1) + Name, Sire, Dam, MGS, BD, Tattoo (6) + trait index (1)
+        const cell = dataRow.getCell(traitIdx + 9);
+        // If cell contains a number, format it with 2 decimal places (3 for FAT)
         if (typeof cell.value === 'number') {
-          cell.numFmt = '0.00';
+          cell.numFmt = trait === 'FAT' ? '0.000' : '0.00';
         }
       });
 
       // Apply color coding to EPD trait cells (only for traits in the predefined list)
       sortedTraits.forEach((trait, traitIdx) => {
-        // +8 for: reg num (1) + Name, Sire, Dam, MGS, BD, Tattoo (6) + trait index (1)
-        const cell = dataRow.getCell(traitIdx + 8);
+        // +9 for: reg num (1) + Score (1) + Name, Sire, Dam, MGS, BD, Tattoo (6) + trait index (1)
+        const cell = dataRow.getCell(traitIdx + 9);
         const traitData = animal.data.epdValues?.[trait];
         
         // Only apply color coding if trait is in the predefined list
@@ -1339,9 +1580,9 @@ ipcMain.handle('export-to-excel', async (event, data) => {
 
       // Set percent rank columns to white background, black text (no colors)
       sortedTraits.forEach((trait, traitIdx) => {
-        // Column index (1-based): reg num (1) + additional info (6) + EPD columns (sortedTraits.length) + percent rank index + 1
-        // Column 1: Registration Number, Columns 2-7: Additional info, Columns 8+: EPD columns, then Percent rank columns
-        const percentRankColIdx = 1 + 6 + sortedTraits.length + traitIdx + 1;
+        // Column index (1-based): reg num (1) + Score (1) + additional info (6) + EPD columns (sortedTraits.length) + percent rank index + 1
+        // Column 1: Registration Number, Column 2: Score, Columns 3-8: Additional info, Columns 9+: EPD columns, then Percent rank columns
+        const percentRankColIdx = 1 + 1 + 6 + sortedTraits.length + traitIdx + 1;
         const cell = dataRow.getCell(percentRankColIdx);
         cell.fill = {
           type: 'pattern',
@@ -1358,10 +1599,12 @@ ipcMain.handle('export-to-excel', async (event, data) => {
     worksheet.columns.forEach((column, index) => {
       if (index === 0) {
         column.width = 20; // Registration Number
-      } else if (index >= 1 && index <= numAdditionalInfoCols) {
+      } else if (index === 1) {
+        column.width = 12; // Score
+      } else if (index >= 2 && index <= 1 + numAdditionalInfoCols) {
         // Additional info columns: Name, Sire, Dam, MGS, BD, Tattoo
         column.width = 25;
-      } else if (index > numAdditionalInfoCols && index <= numAdditionalInfoCols + numEPDCols) {
+      } else if (index > 1 + numAdditionalInfoCols && index <= 1 + numAdditionalInfoCols + numEPDCols) {
         column.width = 15; // EPD columns
       } else {
         column.width = 12; // Percent rank columns (slightly narrower)

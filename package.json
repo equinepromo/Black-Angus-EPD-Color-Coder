@@ -10,7 +10,8 @@
     "build:win": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
     "build:linux": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --linux --publish never",
     "build:all": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --win --linux --publish never",
-    "build:publish": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish always"
+    "build:publish": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish always",
+    "generate-manifest": "node scripts/generate-manifest.js"
   },
   "keywords": [
     "angus",
