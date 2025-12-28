@@ -432,13 +432,11 @@ function mapToBulkFileFormat(mappedData, columnMappings, metadata) {
     animals.push(animal);
   }
   
-  // Create bulk file structure
+  // Create bulk file structure (version removed - using filename as identifier)
   const bulkFile = {
-    version: metadata.version || '1.0.0',
     lastUpdated: new Date().toISOString(),
     source: 'external',
     metadata: {
-      type: metadata.type || 'bulk-file',
       description: metadata.description || 'Imported from external data file',
       animalCount: animals.length,
       category: metadata.category || null
@@ -454,4 +452,5 @@ module.exports = {
   autoDetectColumnMappings,
   mapToBulkFileFormat
 };
+
 

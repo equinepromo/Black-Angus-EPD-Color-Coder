@@ -4,7 +4,21 @@ This guide walks you through setting up your server to distribute bulk files to 
 
 ## Overview
 
-The app checks for bulk files from a manifest file hosted on your server. The manifest lists all available bulk files, and users can import them through the "Bulk Files" tab in the app.
+The app checks for bulk files from a manifest hosted on your server. The manifest lists all available bulk files, and users can import them through the "Bulk Files" tab in the app.
+
+### Two Options Available
+
+**Option 1: Database-Driven (Recommended)**
+- Store bulk file metadata in a database (similar to license management)
+- Easier to manage - just update database records
+- No need to upload/manage manifest.json files
+- See `license-server/BULK_FILES_DATABASE.md` for setup instructions
+
+**Option 2: Static manifest.json File**
+- Traditional approach using a static JSON file
+- Follow the instructions below
+
+> **Note**: The app now defaults to using the database endpoint. If you prefer the static file approach, you'll need to set the `BULK_FILE_MANIFEST_URL` environment variable to point to your `manifest.json` file.
 
 ## Server Structure
 
@@ -268,4 +282,8 @@ Use HTTPS for security. The app expects HTTPS URLs in the manifest.
 - Users can manually check by clicking "Check for Updates"
 - Files are processed once and converted to individual cache files
 - Old bulk files can remain on the server (users won't download them unless they're in the manifest)
+
+
+
+
 

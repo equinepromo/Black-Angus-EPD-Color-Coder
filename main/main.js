@@ -380,8 +380,8 @@ ipcMain.handle('get-bulk-file-status', async (event) => {
 });
 
 // Import bulk file
-ipcMain.handle('import-bulk-file', async (event, bulkFileId, url, options) => {
-  console.log('[MAIN] import-bulk-file called for:', bulkFileId);
+ipcMain.handle('import-bulk-file', async (event, filename, url, options) => {
+  console.log('[MAIN] import-bulk-file called for:', filename);
   
   // Check license before allowing operation
   const licenseStatus = await licenseManager.validateLicense();
@@ -394,7 +394,7 @@ ipcMain.handle('import-bulk-file', async (event, bulkFileId, url, options) => {
     event.sender.send('bulk-file-progress', { progress, total, message });
   };
   
-  return await bulkFileManager.importBulkFile(bulkFileId, url, options || {}, emitProgress);
+  return await bulkFileManager.importBulkFile(filename, url, options || {}, emitProgress);
 });
 
 // Process local bulk file
@@ -417,9 +417,9 @@ ipcMain.handle('process-bulk-file', async (event, filePath, options) => {
 });
 
 // Ignore bulk file update
-ipcMain.handle('ignore-bulk-file-update', async (event, bulkFileId, version, permanent) => {
-  console.log('[MAIN] ignore-bulk-file-update called for:', bulkFileId, 'version:', version, 'permanent:', permanent);
-  bulkFileManager.ignoreBulkFileUpdate(bulkFileId, version, permanent || false);
+ipcMain.handle('ignore-bulk-file-update', async (event, filename, permanent) => {
+  console.log('[MAIN] ignore-bulk-file-update called for:', filename, 'permanent:', permanent);
+  bulkFileManager.ignoreBulkFileUpdate(filename, permanent || false);
   return { success: true };
 });
 
@@ -427,6 +427,155 @@ ipcMain.handle('ignore-bulk-file-update', async (event, bulkFileId, version, per
 ipcMain.handle('get-ignored-updates', async (event) => {
   console.log('[MAIN] get-ignored-updates called');
   return { success: true, ignoredUpdates: bulkFileManager.getIgnoredUpdates() };
+});
+
+// Toggle bulk file active status (admin only)
+ipcMain.handle('toggle-bulk-file-active', async (event, filename, isActive) => {
+  console.log('[MAIN] toggle-bulk-file-active called for:', filename, 'isActive:', isActive);
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  // Check if user has admin privileges
+  const features = licenseStatus.features || [];
+  const licenseType = licenseStatus.licenseType || 'standard';
+  const hasAdminFeature = features.includes('manageBulkFiles') || 
+                         features.includes('all') || 
+                         licenseType === 'admin';
+  
+  if (!hasAdminFeature) {
+    return { success: false, error: 'This feature requires an admin license.' };
+  }
+  
+  try {
+    const https = require('https');
+    const url = process.env.BULK_FILE_TOGGLE_URL || 'https://scoring.westernsports.video/angus/bulk-files/toggle-bulk-file-active.php';
+    const urlObj = new URL(url);
+    
+    const postData = new URLSearchParams({
+      filename: filename,
+      isActive: isActive ? '1' : '0'
+    }).toString();
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 443,
+        path: urlObj.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': postData.length
+        }
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            resolve(result);
+          } catch (error) {
+            console.error('[MAIN] Error parsing toggle response:', error);
+            resolve({ success: false, error: 'Invalid server response' });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[MAIN] Toggle error:', error);
+        resolve({ success: false, error: 'Request failed: ' + error.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    console.error('[MAIN] Error toggling bulk file active:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Delete bulk file (admin only)
+ipcMain.handle('delete-bulk-file', async (event, filename) => {
+  console.log('[MAIN] delete-bulk-file called for:', filename);
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  // Check if user has admin privileges
+  const features = licenseStatus.features || [];
+  const licenseType = licenseStatus.licenseType || 'standard';
+  const hasAdminFeature = features.includes('manageBulkFiles') || 
+                         features.includes('all') || 
+                         licenseType === 'admin';
+  
+  if (!hasAdminFeature) {
+    return { success: false, error: 'This feature requires an admin license.' };
+  }
+  
+  try {
+    const https = require('https');
+    const url = process.env.BULK_FILE_DELETE_URL || 'https://scoring.westernsports.video/angus/bulk-files/delete-bulk-file.php';
+    const urlObj = new URL(url);
+    
+    const postData = new URLSearchParams({
+      filename: filename
+    }).toString();
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 443,
+        path: urlObj.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': postData.length
+        }
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            resolve(result);
+          } catch (error) {
+            console.error('[MAIN] Error parsing delete response:', error);
+            resolve({ success: false, error: 'Invalid server response' });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[MAIN] Delete error:', error);
+        resolve({ success: false, error: 'Request failed: ' + error.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    console.error('[MAIN] Error deleting bulk file:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Export animals to bulk file
@@ -592,6 +741,17 @@ ipcMain.handle('convert-external-data-to-bulk-file', async (event, filePath, col
     return { success: false, error: 'License invalid. Please activate the application.' };
   }
   
+  // Check if user has importExternalData feature
+  const features = licenseStatus.features || [];
+  const licenseType = licenseStatus.licenseType || 'standard';
+  const hasImportFeature = features.includes('importExternalData') || 
+                          features.includes('all') || 
+                          licenseType === 'admin';
+  
+  if (!hasImportFeature) {
+    return { success: false, error: 'This feature requires an admin license.' };
+  }
+  
   try {
     // Parse the file again to get all rows
     const parsedData = await externalDataParser.parseExternalFile(filePath);
@@ -604,33 +764,270 @@ ipcMain.handle('convert-external-data-to-bulk-file', async (event, filePath, col
       return { success: false, error: 'No valid animals found. Please check that registration numbers are mapped correctly.' };
     }
     
-    // Show save dialog
-    const defaultFilename = `${metadata.type || 'bulk-file'}-v${metadata.version || '1.0.0'}.json`;
-    const { canceled, filePath: savePath } = await dialog.showSaveDialog(mainWindow, {
-      title: 'Save Bulk File',
-      defaultPath: defaultFilename,
-      filters: [
-        { name: 'JSON Files', extensions: ['json'] },
-        { name: 'All Files', extensions: ['*'] }
-      ]
+    // Get filename from metadata
+    const filename = metadata.filename || 'bulk-file.json';
+    
+    // Create temporary file for upload
+    const tempDir = require('os').tmpdir();
+    const tempPath = path.join(tempDir, filename);
+    fs.writeFileSync(tempPath, JSON.stringify(bulkFile, null, 2), 'utf8');
+    
+    // Upload to server using multipart/form-data
+    const https = require('https');
+    const uploadUrl = process.env.BULK_FILE_UPLOAD_URL || 'https://scoring.westernsports.video/angus/bulk-files/upload-bulk-file.php';
+    const urlObj = new URL(uploadUrl);
+    
+    // Read file content
+    const fileContent = fs.readFileSync(tempPath);
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2, 15);
+    
+    // Build multipart form data
+    const formData = [];
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="file"; filename="${filename}"\r\n`);
+    formData.push(`Content-Type: application/json\r\n\r\n`);
+    formData.push(fileContent);
+    formData.push(`\r\n--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="filename"\r\n\r\n${filename}\r\n`);
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="name"\r\n\r\n${metadata.name || path.basename(filename, '.json')}\r\n`);
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="category"\r\n\r\n${metadata.category || ''}\r\n`);
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="description"\r\n\r\n${metadata.description || ''}\r\n`);
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="isActive"\r\n\r\n0\r\n`);
+    formData.push(`--${boundary}--\r\n`);
+    
+    const postData = Buffer.concat(formData.map(part => Buffer.isBuffer(part) ? part : Buffer.from(part, 'utf8')));
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 443,
+        path: urlObj.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': postData.length
+        }
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          // Clean up temp file
+          try {
+            fs.unlinkSync(tempPath);
+          } catch (e) {
+            console.warn('[MAIN] Could not delete temp file:', e.message);
+          }
+          
+          try {
+            const result = JSON.parse(data);
+            if (result.success) {
+              console.log(`[MAIN] Uploaded bulk file: ${result.filename} with ${result.animalCount} animals`);
+              resolve({
+                success: true,
+                path: result.url,
+                filename: result.filename,
+                animalCount: result.animalCount,
+                message: result.message
+              });
+            } else {
+              resolve({ success: false, error: result.message || 'Upload failed' });
+            }
+          } catch (error) {
+            console.error('[MAIN] Error parsing upload response:', error);
+            resolve({ success: false, error: 'Invalid server response: ' + data.substring(0, 100) });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        // Clean up temp file
+        try {
+          fs.unlinkSync(tempPath);
+        } catch (e) {
+          console.warn('[MAIN] Could not delete temp file:', e.message);
+        }
+        
+        console.error('[MAIN] Upload error:', error);
+        resolve({ success: false, error: 'Upload failed: ' + error.message });
+      });
+      
+      req.write(postData);
+      req.end();
     });
-    
-    if (canceled || !savePath) {
-      return { success: false, error: 'Save cancelled' };
-    }
-    
-    // Write bulk file
-    fs.writeFileSync(savePath, JSON.stringify(bulkFile, null, 2), 'utf8');
-    
-    console.log(`[MAIN] Converted and saved bulk file: ${savePath} with ${bulkFile.animals.length} animals`);
-    return { 
-      success: true, 
-      path: savePath, 
-      animalCount: bulkFile.animals.length,
-      bulkFile: bulkFile // Return bulk file data in case user wants to import immediately
-    };
   } catch (error) {
     console.error('[MAIN] Error converting external data to bulk file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Upload bulk file (JSON file directly)
+// fileContentOrPath can be either a file path (string) or file content (string)
+ipcMain.handle('upload-bulk-file', async (event, fileContentOrPath, metadata) => {
+  console.log('[MAIN] upload-bulk-file called');
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  // Check if user has importExternalData feature (same as external data import)
+  const features = licenseStatus.features || [];
+  const licenseType = licenseStatus.licenseType || 'standard';
+  const hasImportFeature = features.includes('importExternalData') || 
+                          features.includes('all') || 
+                          licenseType === 'admin';
+  
+  if (!hasImportFeature) {
+    return { success: false, error: 'This feature requires an admin license.' };
+  }
+  
+  try {
+    let fileContent;
+    let fileBuffer;
+    
+    // Check if fileContentOrPath is a file path or file content
+    // JSON content from FileReader will start with '{' or '[' and be long
+    // File paths are typically short, don't start with JSON characters, and exist on disk
+    const trimmed = typeof fileContentOrPath === 'string' ? fileContentOrPath.trim() : '';
+    const isJsonContent = trimmed.startsWith('{') || trimmed.startsWith('[');
+    const isShortString = trimmed.length < 500;
+    const existsAsFile = typeof fileContentOrPath === 'string' && fs.existsSync(fileContentOrPath);
+    
+    // If it looks like JSON content (starts with { or [), treat it as content
+    // Otherwise, if it exists as a file, treat it as a path
+    // Otherwise, if it's short and has path separators, treat it as a path
+    // Otherwise, treat it as content
+    if (!isJsonContent && existsAsFile) {
+      // It's a file path that exists
+      const filePath = fileContentOrPath;
+      
+      // Validate it's a JSON file
+      if (!filePath.toLowerCase().endsWith('.json')) {
+        return { success: false, error: 'File must be a JSON file (.json extension required).' };
+      }
+      
+      // Read file content
+      fileContent = fs.readFileSync(filePath, 'utf8');
+      fileBuffer = fs.readFileSync(filePath);
+    } else {
+      // It's file content (string) - this is what we get from FileReader
+      fileContent = fileContentOrPath;
+      fileBuffer = Buffer.from(fileContent, 'utf8');
+    }
+    
+    // Validate JSON
+    try {
+      const jsonData = JSON.parse(fileContent);
+      
+      // Validate it has the expected bulk file structure
+      if (!jsonData.animals || !Array.isArray(jsonData.animals)) {
+        return { success: false, error: 'Invalid bulk file format. Expected an object with an "animals" array.' };
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        return { success: false, error: 'Invalid JSON file: ' + error.message };
+      }
+      throw error;
+    }
+    
+    // Get filename from metadata (required)
+    const filename = metadata.filename;
+    if (!filename || !filename.trim()) {
+      return { success: false, error: 'Filename is required in metadata.' };
+    }
+    
+    // Ensure filename ends with .json
+    const finalFilename = filename.endsWith('.json') ? filename : filename + '.json';
+    
+    // Upload to server using multipart/form-data
+    const https = require('https');
+    const uploadUrl = process.env.BULK_FILE_UPLOAD_URL || 'https://scoring.westernsports.video/angus/bulk-files/upload-bulk-file.php';
+    const urlObj = new URL(uploadUrl);
+    
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2, 15);
+    
+    // Build multipart form data
+    const formData = [];
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="file"; filename="${finalFilename}"\r\n`);
+    formData.push(`Content-Type: application/json\r\n\r\n`);
+    formData.push(fileBuffer);
+    formData.push(`\r\n--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="filename"\r\n\r\n${finalFilename}\r\n`);
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="name"\r\n\r\n${metadata.name || path.basename(finalFilename, '.json')}\r\n`);
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="category"\r\n\r\n${metadata.category || ''}\r\n`);
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="description"\r\n\r\n${metadata.description || ''}\r\n`);
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="isActive"\r\n\r\n${metadata.isActive ? '1' : '0'}\r\n`);
+    formData.push(`--${boundary}--\r\n`);
+    
+    const postData = Buffer.concat(formData.map(part => Buffer.isBuffer(part) ? part : Buffer.from(part, 'utf8')));
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 443,
+        path: urlObj.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': postData.length
+        }
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            if (result.success) {
+              console.log(`[MAIN] Uploaded bulk file: ${result.filename} with ${result.animalCount} animals`);
+              resolve({
+                success: true,
+                url: result.url,
+                filename: result.filename,
+                animalCount: result.animalCount,
+                message: result.message
+              });
+            } else {
+              resolve({ success: false, error: result.message || 'Upload failed' });
+            }
+          } catch (error) {
+            console.error('[MAIN] Error parsing upload response:', error);
+            resolve({ success: false, error: 'Invalid server response: ' + data.substring(0, 100) });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[MAIN] Upload error:', error);
+        resolve({ success: false, error: 'Upload failed: ' + error.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    console.error('[MAIN] Error uploading bulk file:', error);
     return { success: false, error: error.message };
   }
 });

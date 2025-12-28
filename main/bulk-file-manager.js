@@ -4,10 +4,12 @@ const https = require('https');
 const http = require('http');
 const { app } = require('electron');
 const bulkFileProcessor = require('./bulk-file-processor');
+const licenseManager = require('./license-manager');
 
 // Default manifest URL (uses same server as license server)
 // Can be overridden via environment variable BULK_FILE_MANIFEST_URL
-const DEFAULT_MANIFEST_URL = process.env.BULK_FILE_MANIFEST_URL || 'https://scoring.westernsports.video/angus/bulk-files/manifest.json';
+// Now uses PHP endpoint that queries database instead of static manifest.json
+const DEFAULT_MANIFEST_URL = process.env.BULK_FILE_MANIFEST_URL || 'https://scoring.westernsports.video/angus/bulk-files/get-manifest.php';
 
 /**
  * Get path to bulk files directory (for storing downloaded files)
@@ -147,35 +149,142 @@ function downloadBulkFile(url, targetPath) {
 }
 
 /**
- * Download and parse manifest file
- * @param {string} manifestUrl - URL to manifest file (optional, uses default if not provided)
+ * Fetch manifest from URL (supports both PHP endpoint and static JSON)
+ * @param {string} manifestUrl - URL to manifest endpoint/file
  * @returns {Promise<Object>} { success: boolean, manifest?: Object, error?: string }
  */
-async function getManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
-  try {
-    const bulkFilesDir = getBulkFilesDir();
-    const manifestPath = path.join(bulkFilesDir, 'manifest.json');
+function fetchManifestFromUrl(manifestUrl) {
+  return new Promise((resolve) => {
+    try {
+      const urlObj = new URL(manifestUrl);
+      const client = urlObj.protocol === 'https:' ? https : http;
 
-    // Download manifest
-    const downloadResult = await downloadBulkFile(manifestUrl, manifestPath);
-    if (!downloadResult.success) {
-      return { success: false, error: downloadResult.error };
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+        path: urlObj.pathname + (urlObj.search || ''),
+        method: 'GET',
+        timeout: 30000 // 30 second timeout
+      };
+
+      const req = client.request(options, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          // Try to parse response even if status code is not 200
+          // PHP endpoint returns JSON even on errors
+          let parsedData = null;
+          try {
+            parsedData = JSON.parse(data);
+          } catch (parseError) {
+            // If we can't parse, it's not JSON
+          }
+
+          if (res.statusCode !== 200) {
+            // If we got JSON error response, use that message
+            const errorMsg = parsedData?.error || `HTTP ${res.statusCode}: ${res.statusMessage}`;
+            console.error('[BULK-MANAGER] Manifest fetch error:', errorMsg, parsedData);
+            resolve({ 
+              success: false, 
+              error: errorMsg,
+              // Return empty manifest structure on error so app doesn't crash
+              manifest: parsedData || { lastUpdated: new Date().toISOString(), bulkFiles: [] }
+            });
+            return;
+          }
+
+          try {
+            const manifest = parsedData || JSON.parse(data);
+
+            // Validate manifest structure
+            if (!manifest.bulkFiles || !Array.isArray(manifest.bulkFiles)) {
+              resolve({ 
+                success: false, 
+                error: 'Invalid manifest structure: missing bulkFiles array',
+                manifest: { lastUpdated: new Date().toISOString(), bulkFiles: [] }
+              });
+              return;
+            }
+
+            // Cache manifest locally for offline access (optional)
+            try {
+              const bulkFilesDir = getBulkFilesDir();
+              const manifestPath = path.join(bulkFilesDir, 'manifest.json');
+              fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+            } catch (cacheError) {
+              // Non-fatal - just log it
+              console.warn('[BULK-MANAGER] Could not cache manifest:', cacheError.message);
+            }
+
+            resolve({ success: true, manifest });
+          } catch (parseError) {
+            console.error('[BULK-MANAGER] Error parsing manifest JSON:', parseError);
+            resolve({ 
+              success: false, 
+              error: `Invalid JSON response: ${parseError.message}` 
+            });
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.error('[BULK-MANAGER] Error fetching manifest:', error);
+        resolve({ success: false, error: error.message });
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ success: false, error: 'Request timeout' });
+      });
+
+      req.end();
+    } catch (error) {
+      console.error('[BULK-MANAGER] Error setting up manifest request:', error);
+      resolve({ success: false, error: error.message });
     }
+  });
+}
 
-    // Parse manifest
-    const manifestContent = fs.readFileSync(manifestPath, 'utf8');
-    const manifest = JSON.parse(manifestContent);
-
-    // Validate manifest structure
-    if (!manifest.bulkFiles || !Array.isArray(manifest.bulkFiles)) {
-      return { success: false, error: 'Invalid manifest structure: missing bulkFiles array' };
+/**
+ * Fetch manifest from PHP endpoint (database-driven)
+ * @param {string} manifestUrl - URL to manifest endpoint (optional, uses default if not provided)
+ * @param {boolean} adminMode - If true, fetch all files (active and inactive) for admin users
+ * @returns {Promise<Object>} { success: boolean, manifest?: Object, error?: string }
+ */
+async function getManifest(manifestUrl = null, adminMode = false) {
+  // If no URL provided, use default and check if user is admin
+  if (!manifestUrl) {
+    manifestUrl = DEFAULT_MANIFEST_URL;
+    
+    // Check if user is admin to determine if we should fetch all files
+    if (!adminMode) {
+      try {
+        const licenseStatus = await licenseManager.validateLicense();
+        const licenseType = licenseStatus.licenseType || 'standard';
+        const features = licenseStatus.features || [];
+        adminMode = licenseType === 'admin' || 
+                   features.includes('all') || 
+                   features.includes('manageBulkFiles');
+      } catch (error) {
+        console.warn('[BULK-MANAGER] Could not check license status for admin mode:', error.message);
+        // Default to non-admin mode if we can't check
+        adminMode = false;
+      }
     }
-
-    return { success: true, manifest };
-  } catch (error) {
-    console.error('[BULK-MANAGER] Error getting manifest:', error);
-    return { success: false, error: error.message };
   }
+  
+  // Append admin parameter if admin mode is enabled
+  if (adminMode) {
+    const urlObj = new URL(manifestUrl);
+    urlObj.searchParams.set('admin', 'true');
+    manifestUrl = urlObj.toString();
+  }
+  
+  return await fetchManifestFromUrl(manifestUrl);
 }
 
 /**
@@ -214,34 +323,32 @@ function saveIgnoredUpdates(data) {
 
 /**
  * Check if an update should be ignored
- * @param {string} bulkFileId - Bulk file ID
- * @param {string} version - Version to check
+ * @param {string} filename - Bulk file filename
  * @returns {boolean} True if should be ignored
  */
-function isUpdateIgnored(bulkFileId, version) {
+function isUpdateIgnored(filename) {
   const ignoredData = getIgnoredUpdates();
-  const ignored = ignoredData.ignoredUpdates[bulkFileId];
+  const ignored = ignoredData.ignoredUpdates[filename];
   if (!ignored) {
     return false;
   }
-  // If permanent ignore, ignore all versions
+  // If permanent ignore, ignore all updates for this file
   if (ignored.permanent) {
     return true;
   }
-  // Otherwise, check if this specific version was ignored
-  return ignored.version === version;
+  // Otherwise, check if this specific filename was ignored
+  return ignored.filename === filename;
 }
 
 /**
  * Ignore an update
- * @param {string} bulkFileId - Bulk file ID
- * @param {string} version - Version to ignore
+ * @param {string} filename - Bulk file filename
  * @param {boolean} permanent - If true, ignore all future updates for this file
  */
-function ignoreBulkFileUpdate(bulkFileId, version, permanent = false) {
+function ignoreBulkFileUpdate(filename, permanent = false) {
   const ignoredData = getIgnoredUpdates();
-  ignoredData.ignoredUpdates[bulkFileId] = {
-    version: version,
+  ignoredData.ignoredUpdates[filename] = {
+    filename: filename,
     ignoredAt: new Date().toISOString(),
     permanent: permanent
   };
@@ -283,17 +390,14 @@ async function getBulkFileStatus() {
     };
 
     manifest.bulkFiles.forEach(bulkFile => {
-      const processed = processedFiles.processedFiles[bulkFile.id];
-      const ignored = ignoredUpdates.ignoredUpdates[bulkFile.id];
+      const filename = bulkFile.filename || bulkFile.id; // Use filename, fallback to id for compatibility
+      const processed = processedFiles.processedFiles[filename];
+      const ignored = ignoredUpdates.ignoredUpdates[filename];
       
       let statusType = 'not-imported';
       if (processed) {
-        // Compare versions
-        const localVersion = processed.version;
-        const manifestVersion = bulkFile.version;
-        
-        // Simple version comparison (assuming semantic versioning)
-        if (localVersion === manifestVersion) {
+        // Compare filenames - if different, it's an update
+        if (processed.filename === filename) {
           statusType = 'up-to-date';
         } else {
           statusType = 'update-available';
@@ -301,16 +405,19 @@ async function getBulkFileStatus() {
       }
 
       status.bulkFiles.push({
-        id: bulkFile.id,
+        id: filename, // Use filename as id
         name: bulkFile.name,
         description: bulkFile.description,
-        manifestVersion: bulkFile.version,
-        localVersion: processed?.version || null,
+        filename: filename,
+        localFilename: processed?.filename || null,
         status: statusType,
         lastProcessed: processed?.processedAt || null,
         animalCount: bulkFile.animalCount || 0,
         url: bulkFile.url || null, // Include URL for importing
-        ignored: ignored ? { version: ignored.version, permanent: ignored.permanent } : null
+        updatedAt: bulkFile.updatedAt || null, // Include timestamp
+        isActive: bulkFile.isActive !== undefined ? bulkFile.isActive : true, // Include isActive status
+        category: bulkFile.category || null, // Include category from database
+        ignored: ignored ? { filename: ignored.filename, permanent: ignored.permanent } : null
       });
     });
 
@@ -339,8 +446,8 @@ async function getPendingUpdates() {
         }
         // Check if ignored
         if (bf.ignored) {
-          // Check if this specific version is ignored, or if permanent
-          if (bf.ignored.permanent || bf.ignored.version === bf.manifestVersion) {
+          // Check if this specific filename is ignored, or if permanent
+          if (bf.ignored.permanent || bf.ignored.filename === bf.filename) {
             return false;
           }
         }
@@ -349,7 +456,7 @@ async function getPendingUpdates() {
       .map(bf => ({
         id: bf.id,
         name: bf.name,
-        version: bf.manifestVersion,
+        filename: bf.filename,
         url: bf.url,
         description: bf.description,
         animalCount: bf.animalCount
@@ -372,23 +479,23 @@ async function checkForUpdates() {
 
 /**
  * Import a bulk file (download and process)
- * @param {string} bulkFileId - Bulk file ID
+ * @param {string} filename - Bulk file filename (used as identifier)
  * @param {string} url - URL to bulk file
  * @param {Object} options - Import options
  * @param {Function} progressCallback - Progress callback
  * @returns {Promise<Object>} Import result
  */
-async function importBulkFile(bulkFileId, url, options = {}, progressCallback = null) {
+async function importBulkFile(filename, url, options = {}, progressCallback = null) {
   // Always force re-processing when explicitly importing (user wants to import with current options)
   options = { ...options, forceReprocess: true };
   try {
     const bulkFilesDir = getBulkFilesDir();
     
-    // Extract filename from URL or use bulk file ID
+    // Extract filename from URL if not provided
     const urlObj = new URL(url);
     const urlPath = urlObj.pathname;
-    const filename = path.basename(urlPath) || `${bulkFileId}.json`;
-    const targetPath = path.join(bulkFilesDir, filename);
+    const actualFilename = filename || path.basename(urlPath) || 'bulk-file.json';
+    const targetPath = path.join(bulkFilesDir, actualFilename);
 
     // Download bulk file
     if (progressCallback) {
@@ -429,9 +536,8 @@ async function importBulkFile(bulkFileId, url, options = {}, progressCallback = 
       progressCallback(50, 100, 'Processing bulk file...');
     }
 
-    // Pass bulkFileId in options so processor uses the correct ID (from manifest, not filename)
-    const processOptions = { ...options, bulkFileId };
-    const processResult = bulkFileProcessor.processBulkFile(targetPath, processOptions, (processed, total, current) => {
+    // Process the file - processor will use filename as identifier
+    const processResult = bulkFileProcessor.processBulkFile(targetPath, options, (processed, total, current) => {
       if (progressCallback) {
         const progress = 50 + Math.floor((processed / total) * 50); // 50-100%
         progressCallback(progress, 100, `Processing animal ${processed} of ${total}...`);

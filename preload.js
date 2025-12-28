@@ -35,9 +35,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkBulkFileUpdates: () => ipcRenderer.invoke('check-bulk-file-updates'),
   getPendingUpdates: () => ipcRenderer.invoke('get-pending-updates'),
   getBulkFileStatus: () => ipcRenderer.invoke('get-bulk-file-status'),
-  importBulkFile: (bulkFileId, url, options) => ipcRenderer.invoke('import-bulk-file', bulkFileId, url, options),
+  importBulkFile: (filename, url, options) => ipcRenderer.invoke('import-bulk-file', filename, url, options),
   processBulkFile: (filePath, options) => ipcRenderer.invoke('process-bulk-file', filePath, options),
-  ignoreBulkFileUpdate: (bulkFileId, version, permanent) => ipcRenderer.invoke('ignore-bulk-file-update', bulkFileId, version, permanent),
+  ignoreBulkFileUpdate: (filename, permanent) => ipcRenderer.invoke('ignore-bulk-file-update', filename, permanent),
   getIgnoredUpdates: () => ipcRenderer.invoke('get-ignored-updates'),
   updateAnimalCategories: (registrationNumber, categories, mode) => ipcRenderer.invoke('update-animal-categories', registrationNumber, categories, mode),
   onBulkFileProgress: (callback) => {
@@ -72,6 +72,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showExternalFilePicker: () => ipcRenderer.invoke('show-external-file-picker'),
   parseExternalFile: (filePath) => ipcRenderer.invoke('parse-external-file', filePath),
   detectColumnMappings: (headers, sampleRows) => ipcRenderer.invoke('detect-column-mappings', headers, sampleRows),
-  convertExternalDataToBulkFile: (filePath, columnMappings, metadata) => ipcRenderer.invoke('convert-external-data-to-bulk-file', filePath, columnMappings, metadata)
+  convertExternalDataToBulkFile: (filePath, columnMappings, metadata) => ipcRenderer.invoke('convert-external-data-to-bulk-file', filePath, columnMappings, metadata),
+  // Upload bulk file API
+  uploadBulkFile: (filePath, metadata) => ipcRenderer.invoke('upload-bulk-file', filePath, metadata),
+  // Admin bulk file management APIs
+  toggleBulkFileActive: (filename, isActive) => ipcRenderer.invoke('toggle-bulk-file-active', filename, isActive),
+  deleteBulkFile: (filename) => ipcRenderer.invoke('delete-bulk-file', filename)
 });
 

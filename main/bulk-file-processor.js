@@ -12,9 +12,10 @@ function validateBulkFile(data) {
     return { valid: false, error: 'Bulk file is not a valid object' };
   }
 
-  if (!data.version || typeof data.version !== 'string') {
-    return { valid: false, error: 'Bulk file missing version field' };
-  }
+  // Version is optional now - not required
+  // if (!data.version || typeof data.version !== 'string') {
+  //   return { valid: false, error: 'Bulk file missing version field' };
+  // }
 
   if (!data.metadata || typeof data.metadata !== 'object') {
     return { valid: false, error: 'Bulk file missing metadata field' };
@@ -135,7 +136,7 @@ function shouldUpdateAnimal(existingCache, newData, updateStrategy) {
  * @returns {Array} Array of categories to assign
  */
 function determineCategories(animal, bulkFileMetadata, options) {
-  const { categoryMode, userSelectedCategories, createCategoryIfMissing } = options;
+  const { categoryMode, userSelectedCategories, createCategoryIfMissing, dbCategory } = options;
 
   let categories = [];
 
@@ -143,18 +144,20 @@ function determineCategories(animal, bulkFileMetadata, options) {
     categories = cacheUtil.normalizeCategories(userSelectedCategories);
     console.log(`[BULK-PROCESSOR] Using user-selected categories: ${categories.join(', ')}`);
   } else if (categoryMode === 'use-file-category') {
-    // Use category from bulk file metadata or animal
-    const fileCategory = bulkFileMetadata?.category || animal.category;
+    // Use category from database (dbCategory) first, then bulk file metadata, then animal
+    // dbCategory comes from the database manifest and should be the authoritative source
+    const fileCategory = dbCategory || bulkFileMetadata?.category || animal.category;
     categories = cacheUtil.normalizeCategories(fileCategory);
-    console.log(`[BULK-PROCESSOR] Using file category: ${categories.join(', ')} (from metadata: ${bulkFileMetadata?.category || 'none'}, animal: ${animal.category || 'none'})`);
+    console.log(`[BULK-PROCESSOR] Using file category: ${categories.join(', ')} (from db: ${dbCategory || 'none'}, metadata: ${bulkFileMetadata?.category || 'none'}, animal: ${animal.category || 'none'})`);
   } else if (categoryMode === 'add-to-existing') {
     // Will be merged with existing categories in import logic
-    const fileCategory = bulkFileMetadata?.category || animal.category;
+    // Prefer database category over file metadata
+    const fileCategory = dbCategory || bulkFileMetadata?.category || animal.category;
     categories = cacheUtil.normalizeCategories(fileCategory);
     console.log(`[BULK-PROCESSOR] Using add-to-existing mode, initial categories: ${categories.join(', ')}`);
   } else {
-    // Default: use file category
-    const fileCategory = bulkFileMetadata?.category || animal.category;
+    // Default: use file category (prefer database category)
+    const fileCategory = dbCategory || bulkFileMetadata?.category || animal.category;
     categories = cacheUtil.normalizeCategories(fileCategory);
     console.log(`[BULK-PROCESSOR] Using default file category: ${categories.join(', ')}`);
   }
@@ -200,8 +203,16 @@ function importBulkAnimals(animals, bulkFileMetadata, options, progressCallback 
 
   // Pre-create categories if needed
   const allCategoriesToUse = new Set();
+  const dbCategory = options.dbCategory || null;
+  
   animals.forEach(animal => {
-    const fileCategory = bulkFileMetadata?.category || animal.category;
+    // For use-file-category mode, prefer database category
+    let fileCategory;
+    if (categoryMode === 'use-file-category' && dbCategory) {
+      fileCategory = dbCategory;
+    } else {
+      fileCategory = bulkFileMetadata?.category || animal.category;
+    }
     const cats = cacheUtil.normalizeCategories(fileCategory);
     cats.forEach(cat => allCategoriesToUse.add(cat));
   });
@@ -209,6 +220,12 @@ function importBulkAnimals(animals, bulkFileMetadata, options, progressCallback 
   if (categoryMode === 'user-selected' && userSelectedCategories) {
     const userCats = cacheUtil.normalizeCategories(userSelectedCategories);
     userCats.forEach(cat => allCategoriesToUse.add(cat));
+  }
+  
+  // Also add database category if provided (for use-file-category mode)
+  if (dbCategory && categoryMode === 'use-file-category') {
+    const dbCats = cacheUtil.normalizeCategories(dbCategory);
+    dbCats.forEach(cat => allCategoriesToUse.add(cat));
   }
 
   if (createCategoryIfMissing) {
@@ -373,21 +390,15 @@ function processBulkFile(filePath, options = {}, progressCallback = null) {
       return { success: false, error: validation.error };
     }
 
-    // Extract version from filename if not in data
+    // Use filename as the identifier
     const filename = path.basename(filePath);
-    const versionMatch = filename.match(/v(\d+\.\d+\.\d+)/);
-    const fileVersion = versionMatch ? versionMatch[1] : bulkData.version || '1.0.0';
 
-    // Extract bulk file ID from filename (e.g., recommended-sires-v1.0.0.json -> recommended-sires)
-    // But prefer the ID from options if provided (from manifest)
-    const bulkFileId = options.bulkFileId || filename.replace(/[-_]v\d+\.\d+\.\d+.*$/, '').replace(/\.json$/, '');
-
-    // Check if this version was already processed (unless forceReprocess is true)
+    // Check if this file was already processed (unless forceReprocess is true)
     const forceReprocess = options.forceReprocess === true;
     const processedFiles = getProcessedBulkFiles();
-    const processedFile = processedFiles.processedFiles[bulkFileId];
-    if (!forceReprocess && processedFile && processedFile.version === fileVersion) {
-      console.log(`[BULK-PROCESSOR] Bulk file ${bulkFileId} version ${fileVersion} already processed (use forceReprocess option to re-import)`);
+    const processedFile = processedFiles.processedFiles[filename];
+    if (!forceReprocess && processedFile && processedFile.filename === filename) {
+      console.log(`[BULK-PROCESSOR] Bulk file ${filename} already processed (use forceReprocess option to re-import)`);
       return {
         success: true,
         alreadyProcessed: true,
@@ -398,16 +409,15 @@ function processBulkFile(filePath, options = {}, progressCallback = null) {
     }
     
     if (forceReprocess) {
-      console.log(`[BULK-PROCESSOR] Force re-processing bulk file ${bulkFileId} version ${fileVersion}`);
+      console.log(`[BULK-PROCESSOR] Force re-processing bulk file ${filename}`);
     }
 
     // Process animals
     const animals = Array.isArray(bulkData.animals) ? bulkData.animals : Object.values(bulkData.animals || {});
     const importResult = importBulkAnimals(animals, bulkData.metadata, options, progressCallback);
 
-    // Update tracking
-    processedFiles.processedFiles[bulkFileId] = {
-      version: fileVersion,
+    // Update tracking - use filename as the key
+    processedFiles.processedFiles[filename] = {
       filename: filename,
       processedAt: new Date().toISOString(),
       animalCount: animals.length,
@@ -423,8 +433,7 @@ function processBulkFile(filePath, options = {}, progressCallback = null) {
 
     return {
       success: true,
-      bulkFileId,
-      version: fileVersion,
+      filename: filename,
       ...importResult
     };
   } catch (error) {
@@ -449,22 +458,26 @@ function processBulkFile(filePath, options = {}, progressCallback = null) {
  */
 function createBulkFileFromAnimals(animals, options = {}) {
   const {
-    version = '1.0.0',
-    type = 'bulk-file',
+    filename = null,
+    name = 'Bulk File',
+    type = null,
     category = null,
     source = 'angus.org',
     description = null
   } = options;
 
   const now = new Date().toISOString();
+  
+  // Use type from filename if type not provided
+  const fileType = type || (filename ? filename.replace(/\.json$/i, '') : 'bulk-file');
 
   return {
-    version,
     lastUpdated: now,
     source,
     metadata: {
-      type,
-      description: description || `Bulk file: ${type}`,
+      type: fileType,
+      name: name,
+      description: description || `Bulk file: ${name}`,
       animalCount: animals.length,
       category: category || null
     },

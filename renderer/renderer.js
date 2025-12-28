@@ -667,13 +667,21 @@ async function displayResults(results) {
       );
       
       if (hasMissingRanks) {
-        // Determine animal type
-        const sex = (result.data.sex || '').toUpperCase();
-        const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+        // Determine animal type - be explicit about bull vs cow
+        const sex = (result.data.sex || '').toUpperCase().trim();
+        // Check for bull/male first (more specific)
+        const isBull = sex === 'BULL' || sex === 'MALE' || sex === 'STEER' || 
+                      sex.includes('BULL') || sex.includes('MALE') || 
+                      sex === 'B' || sex.startsWith('BULL') || sex.startsWith('MALE');
+        // Then check for cow/female
+        const isCow = !isBull && (sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || 
+                      sex.includes('COW') || sex.includes('FEMALE') || 
+                      sex === 'C' || sex.startsWith('COW') || sex.startsWith('FEMALE'));
+        // Default to bull if sex is empty or unclear
         const animalType = isCow ? 'cow' : 'bull';
         
         try {
-          console.log(`[UI] Calculating missing percentile ranks for ${result.registrationNumber} (${animalType})`);
+          console.log(`[UI] Calculating missing percentile ranks for ${result.registrationNumber} - sex: "${result.data.sex || 'N/A'}" (${sex}), type: ${animalType}`);
           const rankResult = await window.electronAPI.calculatePercentileRanks(
             result.data.epdValues, 
             animalType, 
@@ -697,8 +705,17 @@ async function displayResults(results) {
 
   // Calculate scores for each animal (using shared scoring function)
   await Promise.all(validResults.map(async (result) => {
-    const sex = (result.data.sex || '').toUpperCase();
-    const isCow = sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || sex.includes('COW') || sex.includes('FEMALE');
+    // Determine animal type - be explicit about bull vs cow
+    const sex = (result.data.sex || '').toUpperCase().trim();
+    // Check for bull/male first (more specific)
+    const isBull = sex === 'BULL' || sex === 'MALE' || sex === 'STEER' || 
+                  sex.includes('BULL') || sex.includes('MALE') || 
+                  sex === 'B' || sex.startsWith('BULL') || sex.startsWith('MALE');
+    // Then check for cow/female
+    const isCow = !isBull && (sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || 
+                  sex.includes('COW') || sex.includes('FEMALE') || 
+                  sex === 'C' || sex.startsWith('COW') || sex.startsWith('FEMALE'));
+    // Default to bull if sex is empty or unclear
     const animalType = isCow ? 'cow' : 'bull';
     
     result.score = await scoreAnimal(result.data, animalType, gateTraits);
@@ -2509,7 +2526,9 @@ function displayInventory() {
     viewBtn.style.marginRight = '5px';
     viewBtn.style.padding = '4px 8px';
     viewBtn.style.fontSize = '0.9em';
-    viewBtn.addEventListener('click', () => {
+    viewBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       showAnimalDetailsModal(animal);
     });
     actionsCell.appendChild(viewBtn);
@@ -3008,8 +3027,8 @@ let exportDialogOptions = null;
 // Set up export dialog event listeners (once)
 (function setupExportDialog() {
   const exportDialog = document.getElementById('bulk-file-export-dialog');
-  const versionInput = document.getElementById('bulk-export-version');
-  const typeInput = document.getElementById('bulk-export-type');
+  const filenameInput = document.getElementById('bulk-export-filename');
+  const nameInput = document.getElementById('bulk-export-name');
   const descriptionInput = document.getElementById('bulk-export-description');
   const confirmBtn = document.getElementById('confirm-bulk-file-export-btn');
   const cancelBtn = document.getElementById('cancel-bulk-file-export-btn');
@@ -3031,30 +3050,34 @@ let exportDialogOptions = null;
 
   // Confirm button handler
   confirmBtn.addEventListener('click', async () => {
-    if (!exportDialogAnimals || !versionInput || !typeInput) {
+    if (!exportDialogAnimals || !filenameInput || !nameInput) {
       closeDialog();
       return;
     }
 
-    const version = versionInput.value.trim();
-    const type = typeInput.value.trim();
+    let filename = filenameInput.value.trim();
+    const name = nameInput.value.trim();
 
-    if (!version) {
-      alert('Please enter a version number');
+    if (!filename) {
+      alert('Please enter a filename (e.g., my-file-2025-01-15.json)');
       return;
     }
 
-    if (!type) {
-      alert('Please enter a type/name');
+    if (!name) {
+      alert('Please enter a display name');
       return;
+    }
+
+    // Ensure filename ends with .json
+    if (!filename.endsWith('.json')) {
+      filename = filename + '.json';
     }
 
     const exportOptions = {
-      version,
-      type,
+      filename,
+      name,
       category: exportDialogOptions?.category || null,
-      description: descriptionInput?.value.trim() || null,
-      filename: `${type}-v${version}.json`
+      description: descriptionInput?.value.trim() || null
     };
 
     try {
@@ -3094,7 +3117,7 @@ let exportDialogOptions = null;
   });
 
   // Allow Enter key to submit from inputs
-  [versionInput, typeInput, descriptionInput].forEach(input => {
+  [filenameInput, nameInput, descriptionInput].forEach(input => {
     if (input) {
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -3110,11 +3133,11 @@ async function exportAnimalsToBulkFile(animals, title, options = {}) {
   return new Promise((resolve) => {
     const exportDialog = document.getElementById('bulk-file-export-dialog');
     const exportTitle = document.getElementById('bulk-file-export-title');
-    const versionInput = document.getElementById('bulk-export-version');
-    const typeInput = document.getElementById('bulk-export-type');
+    const filenameInput = document.getElementById('bulk-export-filename');
+    const nameInput = document.getElementById('bulk-export-name');
     const descriptionInput = document.getElementById('bulk-export-description');
 
-    if (!exportDialog || !versionInput || !typeInput) {
+    if (!exportDialog || !filenameInput || !nameInput) {
       alert('Export dialog elements not found');
       resolve();
       return;
@@ -3130,17 +3153,35 @@ async function exportAnimalsToBulkFile(animals, title, options = {}) {
       exportTitle.textContent = title || 'Export to Bulk File';
     }
 
+    // Generate default filename from type/name if provided, otherwise use timestamp
+    let defaultFilename = options.filename;
+    if (!defaultFilename && options.type) {
+      const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '-');
+      defaultFilename = `${options.type}-${dateStr}.json`;
+    } else if (!defaultFilename) {
+      const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '-');
+      defaultFilename = `bulk-file-${dateStr}.json`;
+    }
+
     // Set default values
-    versionInput.value = options.version || '1.0.0';
-    typeInput.value = options.type || 'bulk-file';
+    filenameInput.value = defaultFilename;
+    
+    // Generate default name from filename or use provided name
+    let defaultName = options.name;
+    if (!defaultName && defaultFilename) {
+      const nameWithoutExt = defaultFilename.replace(/\.json$/i, '');
+      defaultName = nameWithoutExt.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+    nameInput.value = defaultName || 'Bulk File';
+    
     if (descriptionInput) {
       descriptionInput.value = options.description || '';
     }
 
     // Show dialog and focus first input
     exportDialog.style.display = 'block';
-    versionInput.focus();
-    versionInput.select();
+    filenameInput.focus();
+    filenameInput.select();
   });
 }
 
@@ -3312,11 +3353,66 @@ async function showAnimalDetailsModal(animal) {
   animalDetailsModal.style.display = 'block';
   
   try {
-    // Process the animal to get its EPD data
-    const result = await window.electronAPI.scrapeEPD(animal.registrationNumber);
+    // Try to get cached data first to avoid unnecessary scraping
+    // Only scrape if data is missing or user explicitly wants fresh data
+    let result = null;
+    const cachedAnimals = await window.electronAPI.getCachedAnimals();
+    const cachedAnimal = cachedAnimals.find(a => a.registrationNumber === animal.registrationNumber);
+    
+    if (cachedAnimal && cachedAnimal.data && cachedAnimal.data.epdValues) {
+      // Use cached data - no need to scrape
+      console.log('[UI] Using cached data for animal details:', animal.registrationNumber);
+      result = {
+        success: true,
+        data: cachedAnimal.data
+      };
+    } else {
+      // Only scrape if not in cache
+      console.log('[UI] Animal not in cache, scraping:', animal.registrationNumber);
+      result = await window.electronAPI.scrapeEPD(animal.registrationNumber);
+    }
     
     if (result.success && result.data) {
-      const animalData = result.data;
+      let animalData = result.data;
+      
+      // Check if any traits are missing percentile ranks and calculate them
+      if (animalData.epdValues && animal.registrationNumber) {
+        const hasMissingRanks = Object.values(animalData.epdValues).some(traitData => 
+          traitData.epd && (!traitData.percentRank || traitData.percentRank === 'N/A' || traitData.percentRank === null)
+        );
+        
+        if (hasMissingRanks) {
+          // Determine animal type - be explicit about bull vs cow
+          const sex = (animalData.sex || '').toUpperCase().trim();
+          // Check for bull/male first (more specific)
+          const isBull = sex === 'BULL' || sex === 'MALE' || sex === 'STEER' || 
+                        sex.includes('BULL') || sex.includes('MALE') || 
+                        sex === 'B' || sex.startsWith('BULL') || sex.startsWith('MALE');
+          // Then check for cow/female
+          const isCow = !isBull && (sex === 'COW' || sex === 'FEMALE' || sex === 'HEIFER' || 
+                        sex.includes('COW') || sex.includes('FEMALE') || 
+                        sex === 'C' || sex.startsWith('COW') || sex.startsWith('FEMALE'));
+          // Default to bull if sex is empty or unclear
+          const animalType = isCow ? 'cow' : 'bull';
+          
+          try {
+            console.log(`[UI] Calculating missing percentile ranks for ${animal.registrationNumber} - sex: "${animalData.sex || 'N/A'}" (${sex}), type: ${animalType}`);
+            const rankResult = await window.electronAPI.calculatePercentileRanks(
+              animalData.epdValues, 
+              animalType, 
+              animal.registrationNumber, 
+              true // saveToCache = true
+            );
+            if (rankResult.success && rankResult.updated) {
+              animalData.epdValues = rankResult.epdValues;
+              console.log(`[UI] Successfully calculated and saved percentile ranks for ${animal.registrationNumber}`);
+            }
+          } catch (error) {
+            console.error(`[UI] Error calculating percentile ranks:`, error);
+            // Continue without percentile ranks - not a fatal error
+          }
+        }
+      }
       
       // Fetch percentile data for color coding
       let percentileData = null;
@@ -3557,10 +3653,22 @@ async function showCategoryManagementModal() {
   await loadCategoriesFromConfig();
   
   // Get all animals to count per category
+  // Support both new array format (categories) and old single format (category)
   const categoryCounts = {};
   allInventoryAnimals.forEach(animal => {
-    const cat = animal.category || 'My Herd';
-    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    // Check if animal has categories array (new format)
+    if (animal.categories && Array.isArray(animal.categories)) {
+      // Count animal in each category it belongs to
+      animal.categories.forEach(cat => {
+        if (cat) {
+          categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+        }
+      });
+    } else {
+      // Fall back to old single category format
+      const cat = animal.category || 'My Herd';
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    }
   });
   
   // Build modal content
@@ -3658,8 +3766,11 @@ async function loadBulkFileStatus() {
   }
 }
 
+// Store admin status for use in display
+let isAdminUser = false;
+
 // Display bulk file status
-function displayBulkFileStatus(status) {
+async function displayBulkFileStatus(status) {
   const container = document.getElementById('bulk-files-status-container');
   if (!container) return;
 
@@ -3668,46 +3779,78 @@ function displayBulkFileStatus(status) {
     return;
   }
 
+  // Check if user is admin
+  try {
+    const licenseStatus = await window.electronAPI.validateLicense();
+    const features = licenseStatus.features || [];
+    const licenseType = licenseStatus.licenseType || 'standard';
+    isAdminUser = licenseType === 'admin' || 
+                 features.includes('all') || 
+                 features.includes('manageBulkFiles');
+  } catch (error) {
+    console.warn('Could not check admin status:', error);
+    isAdminUser = false;
+  }
+
   console.log('[UI] Displaying bulk file status:', status.bulkFiles.length, 'files');
   
   let html = '<div style="display: grid; gap: 15px;">';
   
   status.bulkFiles.forEach((bf, index) => {
-    console.log(`[UI] Processing bulk file ${index + 1}/${status.bulkFiles.length}:`, bf.id, bf.name);
+    console.log(`[UI] Processing bulk file ${index + 1}/${status.bulkFiles.length}:`, bf.filename || bf.id, bf.name);
     const statusBadge = getStatusBadge(bf.status);
-    const versionInfo = bf.localVersion ? `v${bf.localVersion} → v${bf.manifestVersion}` : `v${bf.manifestVersion}`;
+    const filename = bf.filename || bf.id; // Use filename, fallback to id for compatibility
+    const filenameInfo = bf.localFilename ? `${bf.localFilename} → ${filename}` : filename;
     
     // Escape HTML in user-provided content to prevent injection
     const safeName = (bf.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const safeDescription = (bf.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const safeId = (bf.id || '').replace(/"/g, '&quot;');
+    const safeFilename = (filename || '').replace(/"/g, '&quot;');
     // URL should already be encoded, but ensure it's safe for HTML attributes
     const safeUrl = (bf.url || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     
+    // Show inactive badge for admin users
+    const isActive = bf.isActive !== undefined ? bf.isActive : true;
+    const inactiveBadge = !isActive ? '<span style="background-color: #ff9800; color: white; padding: 4px 8px; border-radius: 3px; font-size: 0.8em; margin-left: 10px;">Inactive</span>' : '';
+    
+    // Admin controls
+    const adminControls = isAdminUser ? `
+      <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
+        <button class="btn btn-secondary bulk-file-toggle-active-btn" data-filename="${safeFilename}" data-isactive="${isActive ? '1' : '0'}" style="margin-right: 10px; font-size: 0.9em;">
+          ${isActive ? 'Deactivate' : 'Activate'}
+        </button>
+        <button class="btn btn-danger bulk-file-delete-btn" data-filename="${safeFilename}" data-name="${safeName}" style="font-size: 0.9em;">
+          Delete
+        </button>
+      </div>
+    ` : '';
+    
     html += `
-      <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
+      <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px; ${!isActive ? 'opacity: 0.7; background-color: #f9f9f9;' : ''}">
         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
           <div>
-            <h3 style="margin: 0 0 5px 0;">${safeName}</h3>
+            <h3 style="margin: 0 0 5px 0;">${safeName}${inactiveBadge}</h3>
             <p style="margin: 0; color: #666; font-size: 0.9em;">${safeDescription}</p>
           </div>
           ${statusBadge}
         </div>
         <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-          <div>Version: ${versionInfo}</div>
+          <div>File: ${filenameInfo}</div>
           <div>Animals: ${bf.animalCount || 0}</div>
           ${bf.lastProcessed ? `<div>Last Imported: ${new Date(bf.lastProcessed).toLocaleString()}</div>` : ''}
+          ${bf.updatedAt ? `<div>Updated: ${new Date(bf.updatedAt).toLocaleString()}</div>` : ''}
         </div>
         <div style="margin-top: 15px;">
-          <button class="btn btn-primary bulk-file-import-btn" data-bulk-file-id="${safeId}" data-url="${safeUrl}" style="margin-right: 10px;" ${!bf.url ? 'disabled title="URL not available - check for updates first"' : ''}>
+          <button class="btn btn-primary bulk-file-import-btn" data-filename="${safeFilename}" data-url="${safeUrl}" data-category="${(bf.category || '').replace(/"/g, '&quot;')}" style="margin-right: 10px;" ${!bf.url ? 'disabled title="URL not available - check for updates first"' : ''}>
             ${bf.status === 'not-imported' ? 'Import' : bf.status === 'update-available' ? 'Update' : 'Re-import'}
           </button>
           ${bf.status === 'update-available' && !bf.ignored?.permanent ? `
-            <button class="btn btn-secondary bulk-file-ignore-btn" data-bulk-file-id="${safeId}" data-version="${bf.manifestVersion}">
+            <button class="btn btn-secondary bulk-file-ignore-btn" data-filename="${safeFilename}">
               Ignore Update
             </button>
           ` : ''}
         </div>
+        ${adminControls}
       </div>
     `;
   });
@@ -3724,21 +3867,40 @@ function displayBulkFileStatus(status) {
 function attachBulkFileEventListeners(container) {
   container.querySelectorAll('.bulk-file-import-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
-      const bulkFileId = e.target.dataset.bulkFileId;
+      const filename = e.target.dataset.filename;
       const url = e.target.dataset.url;
+      const category = e.target.dataset.category || null;
       if (!url) {
         alert('URL not available. Please check for updates first.');
         return;
       }
-      await showBulkFileImportDialog(bulkFileId, url);
+      await showBulkFileImportDialog(filename, url, category);
     });
   });
 
   container.querySelectorAll('.bulk-file-ignore-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
-      const bulkFileId = e.target.dataset.bulkFileId;
-      const version = e.target.dataset.version;
-      await ignoreBulkFileUpdate(bulkFileId, version);
+      const filename = e.target.dataset.filename;
+      await ignoreBulkFileUpdate(filename);
+    });
+  });
+
+  // Admin controls
+  container.querySelectorAll('.bulk-file-toggle-active-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const filename = e.target.dataset.filename;
+      const currentIsActive = e.target.dataset.isactive === '1';
+      await toggleBulkFileActive(filename, !currentIsActive);
+    });
+  });
+
+  container.querySelectorAll('.bulk-file-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const filename = e.target.dataset.filename;
+      const name = e.target.dataset.name || filename;
+      if (confirm(`Are you sure you want to delete "${name}"?\n\nThis will permanently delete the file from both the database and the server. This action cannot be undone.`)) {
+        await deleteBulkFile(filename);
+      }
     });
   });
 }
@@ -3748,7 +3910,8 @@ function displayBulkFileStatusFallback(status, container) {
   
   status.bulkFiles.forEach(bf => {
     const statusBadge = getStatusBadge(bf.status);
-    const versionInfo = bf.localVersion ? `v${bf.localVersion} → v${bf.manifestVersion}` : `v${bf.manifestVersion}`;
+    const filename = bf.filename || bf.id;
+    const filenameInfo = bf.localFilename ? `${bf.localFilename} → ${filename}` : filename;
     
     html += `
       <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
@@ -3760,12 +3923,12 @@ function displayBulkFileStatusFallback(status, container) {
           ${statusBadge}
         </div>
         <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-          <div>Version: ${versionInfo}</div>
+          <div>File: ${filenameInfo}</div>
           <div>Animals: ${bf.animalCount || 0}</div>
           ${bf.lastProcessed ? `<div>Last Imported: ${new Date(bf.lastProcessed).toLocaleString()}</div>` : ''}
         </div>
         <div style="margin-top: 15px;">
-          <button class="btn btn-primary bulk-file-import-btn" data-bulk-file-id="${bf.id}" data-url="" style="margin-right: 10px;" disabled>
+          <button class="btn btn-primary bulk-file-import-btn" data-filename="${filename}" data-url="" style="margin-right: 10px;" disabled>
             ${bf.status === 'not-imported' ? 'Import' : bf.status === 'update-available' ? 'Update' : 'Re-import'} (Check for updates first)
           </button>
         </div>
@@ -3787,7 +3950,7 @@ function getStatusBadge(status) {
 }
 
 // Show bulk file import dialog
-async function showBulkFileImportDialog(bulkFileId, url) {
+async function showBulkFileImportDialog(filename, url, dbCategory = null) {
   const dialog = document.getElementById('bulk-file-import-dialog');
   const content = document.getElementById('bulk-file-import-content');
   
@@ -3795,10 +3958,13 @@ async function showBulkFileImportDialog(bulkFileId, url) {
 
   // Get available categories
   const categories = await window.electronAPI.getAvailableCategories();
+  
+  // Store the database category for use in import
+  dialog.dataset.dbCategory = dbCategory || '';
 
   content.innerHTML = `
     <div>
-      <p><strong>Importing:</strong> ${bulkFileId}</p>
+      <p><strong>Importing:</strong> ${filename}</p>
       
       <div style="margin-top: 20px;">
         <label><strong>Category Assignment Mode:</strong></label>
@@ -3865,23 +4031,27 @@ async function showBulkFileImportDialog(bulkFileId, url) {
       : null;
     const createCategoryIfMissing = content.querySelector('#bulk-import-create-category').checked;
     const updateStrategy = content.querySelector('#bulk-import-update-strategy').value;
+    
+    // Get database category if available (for use-file-category mode)
+    const dbCategory = dialog.dataset.dbCategory || null;
 
     const options = {
       categoryMode,
       userSelectedCategories,
       createCategoryIfMissing,
-      updateStrategy
+      updateStrategy,
+      dbCategory // Pass database category for use-file-category mode
     };
 
     dialog.style.display = 'none';
-    await importBulkFile(bulkFileId, url, options);
+    await importBulkFile(filename, url, options);
   });
 
   dialog.style.display = 'block';
 }
 
 // Import bulk file
-async function importBulkFile(bulkFileId, url, options) {
+async function importBulkFile(filename, url, options) {
   try {
     // Show progress
     const statusContainer = document.getElementById('bulk-files-status-container');
@@ -3893,7 +4063,7 @@ async function importBulkFile(bulkFileId, url, options) {
       statusContainer.innerHTML = `<div class="placeholder"><p>${data.message || 'Processing...'} (${data.progress || 0}%)</p></div>`;
     });
 
-    const result = await window.electronAPI.importBulkFile(bulkFileId, url, options);
+    const result = await window.electronAPI.importBulkFile(filename, url, options);
     
     if (result.success) {
       alert(`Bulk file imported successfully!\n\nImported: ${result.importedCount}\nUpdated: ${result.updatedCount || 0}\nSkipped: ${result.skippedCount || 0}`);
@@ -3914,13 +4084,45 @@ async function importBulkFile(bulkFileId, url, options) {
 }
 
 // Ignore bulk file update
-async function ignoreBulkFileUpdate(bulkFileId, version) {
+async function ignoreBulkFileUpdate(filename) {
   try {
-    await window.electronAPI.ignoreBulkFileUpdate(bulkFileId, version, false);
+    await window.electronAPI.ignoreBulkFileUpdate(filename, false);
     await loadBulkFileStatus();
   } catch (error) {
     console.error('Error ignoring bulk file update:', error);
     alert(`Error ignoring update: ${error.message}`);
+  }
+}
+
+// Toggle bulk file active status (admin only)
+async function toggleBulkFileActive(filename, isActive) {
+  try {
+    const result = await window.electronAPI.toggleBulkFileActive(filename, isActive);
+    if (result.success) {
+      alert(result.message || (isActive ? 'File activated successfully' : 'File deactivated successfully'));
+      await loadBulkFileStatus();
+    } else {
+      alert(`Error: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error toggling bulk file active status:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+// Delete bulk file (admin only)
+async function deleteBulkFile(filename) {
+  try {
+    const result = await window.electronAPI.deleteBulkFile(filename);
+    if (result.success) {
+      alert(result.message || 'File deleted successfully');
+      await loadBulkFileStatus();
+    } else {
+      alert(`Error: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error deleting bulk file:', error);
+    alert(`Error: ${error.message}`);
   }
 }
 
@@ -3953,7 +4155,7 @@ function showBulkFileUpdatesNotification(updates) {
   if (!notification || !title || !message) return;
 
   title.textContent = `${updates.length} Bulk File Update${updates.length > 1 ? 's' : ''} Available`;
-  message.textContent = updates.map(u => `${u.name} (v${u.manifestVersion})`).join(', ');
+  message.textContent = updates.map(u => `${u.name} (${u.filename || u.id})`).join(', ');
   
   notification.style.display = 'block';
 }
@@ -4289,24 +4491,28 @@ async function convertExternalDataToBulkFile() {
     return;
   }
 
-  const versionInput = document.getElementById('external-import-version');
-  const typeInput = document.getElementById('external-import-type');
+  const filenameInput = document.getElementById('external-import-type');
   const categorySelect = document.getElementById('external-import-category');
   const descriptionInput = document.getElementById('external-import-description');
 
-  if (!versionInput || !versionInput.value.trim()) {
-    alert('Version is required. Please enter a version number.');
+  if (!filenameInput || !filenameInput.value.trim()) {
+    alert('Filename is required. Please enter a filename (e.g., bulk-file-2025-01-15.json).');
     return;
   }
 
-  if (!typeInput || !typeInput.value.trim()) {
-    alert('Type/Name is required. Please enter a type/name.');
-    return;
+  // Ensure filename ends with .json
+  let filename = filenameInput.value.trim();
+  if (!filename.endsWith('.json')) {
+    filename = filename + '.json';
   }
 
+  // Extract name from filename (remove .json extension and format)
+  const nameWithoutExt = filename.replace(/\.json$/i, '');
+  const name = nameWithoutExt.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  
   const metadata = {
-    version: versionInput.value.trim(),
-    type: typeInput.value.trim(),
+    filename: filename,
+    name: name,
     category: categorySelect ? categorySelect.value : 'My Herd',
     description: descriptionInput ? descriptionInput.value.trim() : ''
   };
@@ -4325,7 +4531,7 @@ async function convertExternalDataToBulkFile() {
     );
 
     if (result.success) {
-      alert(`Bulk file created successfully!\n\nFile: ${result.path}\nAnimals: ${result.animalCount}`);
+      alert(`Bulk file uploaded successfully!\n\nFile: ${result.filename}\nURL: ${result.path}\nAnimals: ${result.animalCount}\n\n${result.message || ''}`);
       
       // Close dialog
       const dialog = document.getElementById('external-data-import-dialog');
@@ -4333,12 +4539,12 @@ async function convertExternalDataToBulkFile() {
         dialog.style.display = 'none';
       }
 
-      // Optionally refresh bulk file status
+      // Refresh bulk file status to show the new file
       if (typeof loadBulkFileStatus === 'function') {
         loadBulkFileStatus();
       }
     } else {
-      alert(`Error creating bulk file: ${result.error}`);
+      alert(`Error uploading bulk file: ${result.error}`);
     }
   } catch (error) {
     console.error('Error converting external data:', error);
@@ -4352,6 +4558,42 @@ async function convertExternalDataToBulkFile() {
   }
 }
 
+// Check license features and update UI visibility
+async function updateUIBasedOnLicense() {
+  try {
+    // Validate license to get fresh data from server (including licenseType and features)
+    const licenseStatus = await window.electronAPI.validateLicense();
+    const features = licenseStatus.features || [];
+    const licenseType = licenseStatus.licenseType || 'standard';
+    const hasAdminFeature = features.includes('importExternalData') || 
+                           features.includes('all') || 
+                           licenseType === 'admin';
+    
+    // Show/hide Import External Data button based on license features
+    const importBtn = document.getElementById('import-external-data-btn');
+    if (importBtn) {
+      importBtn.style.display = hasAdminFeature ? 'inline-block' : 'none';
+    }
+    
+    // Show/hide Upload JSON File button based on license features
+    const uploadJsonBtn = document.getElementById('upload-json-file-btn');
+    if (uploadJsonBtn) {
+      uploadJsonBtn.style.display = hasAdminFeature ? 'inline-block' : 'none';
+    }
+  } catch (error) {
+    console.error('Error checking license features:', error);
+    // Hide buttons if we can't check license
+    const importBtn = document.getElementById('import-external-data-btn');
+    if (importBtn) {
+      importBtn.style.display = 'none';
+    }
+    const uploadJsonBtn = document.getElementById('upload-json-file-btn');
+    if (uploadJsonBtn) {
+      uploadJsonBtn.style.display = 'none';
+    }
+  }
+}
+
 // Event listeners for external data import
 document.addEventListener('DOMContentLoaded', () => {
   // Import external data button
@@ -4359,6 +4601,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (importBtn) {
     importBtn.addEventListener('click', importExternalData);
   }
+  
+  // Check license and update UI on load (after a short delay to ensure DOM is ready)
+  setTimeout(() => {
+    updateUIBasedOnLicense();
+  }, 500);
 
   // File selection
   const selectFileBtn = document.getElementById('select-external-file-btn');
@@ -4458,15 +4705,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Bulk file updates notification buttons
-  const importAllBtn = document.getElementById('bulk-file-import-all-btn');
-  if (importAllBtn) {
-    importAllBtn.addEventListener('click', async () => {
-      // Import all pending updates (for now, just show message)
-      alert('Import all feature coming soon. Please import files individually from the Bulk Files tab.');
-      document.getElementById('bulk-file-updates-notification').style.display = 'none';
-    });
-  }
-
   const importSelectedBtn = document.getElementById('bulk-file-import-selected-btn');
   if (importSelectedBtn) {
     importSelectedBtn.addEventListener('click', () => {
@@ -4497,7 +4735,200 @@ document.addEventListener('DOMContentLoaded', () => {
       showBulkFileUpdatesNotification(data.pendingUpdates);
     }
   });
+
+  // Upload JSON File button
+  const uploadJsonBtn = document.getElementById('upload-json-file-btn');
+  if (uploadJsonBtn) {
+    uploadJsonBtn.addEventListener('click', showUploadJsonDialog);
+  }
+
+  // Upload JSON file input
+  const uploadJsonFileInput = document.getElementById('upload-json-file-input');
+  if (uploadJsonFileInput) {
+    uploadJsonFileInput.addEventListener('change', handleUploadJsonFileSelect);
+  }
+
+  // Upload JSON dialog buttons
+  const uploadJsonCancelBtn = document.getElementById('upload-json-cancel-btn');
+  if (uploadJsonCancelBtn) {
+    uploadJsonCancelBtn.addEventListener('click', () => {
+      document.getElementById('upload-json-file-dialog').style.display = 'none';
+    });
+  }
+
+  const uploadJsonCloseBtn = document.getElementById('close-upload-json-dialog-btn');
+  if (uploadJsonCloseBtn) {
+    uploadJsonCloseBtn.addEventListener('click', () => {
+      document.getElementById('upload-json-file-dialog').style.display = 'none';
+    });
+  }
+
+  const uploadJsonConfirmBtn = document.getElementById('upload-json-confirm-btn');
+  if (uploadJsonConfirmBtn) {
+    uploadJsonConfirmBtn.addEventListener('click', uploadJsonFile);
+  }
 });
+
+// Show upload JSON file dialog
+async function showUploadJsonDialog() {
+  const dialog = document.getElementById('upload-json-file-dialog');
+  if (!dialog) return;
+
+  // Reset form
+  document.getElementById('upload-json-file-input').value = '';
+  document.getElementById('upload-json-filename').value = '';
+  document.getElementById('upload-json-name').value = '';
+  document.getElementById('upload-json-description').value = '';
+  document.getElementById('upload-json-is-active').checked = false;
+  document.getElementById('upload-json-file-info').style.display = 'none';
+
+  // Load categories
+  try {
+    const categories = await window.electronAPI.getAvailableCategories();
+    const categorySelect = document.getElementById('upload-json-category');
+    if (categorySelect && categories && categories.length > 0) {
+      categorySelect.innerHTML = categories.map(cat => 
+        `<option value="${cat}">${cat}</option>`
+      ).join('');
+    }
+  } catch (error) {
+    console.error('Error loading categories:', error);
+  }
+
+  dialog.style.display = 'block';
+}
+
+// Handle JSON file selection
+function handleUploadJsonFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!file.name.toLowerCase().endsWith('.json')) {
+    alert('Please select a JSON file.');
+    event.target.value = '';
+    return;
+  }
+
+  // Show file info
+  const fileInfo = document.getElementById('upload-json-file-info');
+  const fileName = document.getElementById('upload-json-file-name');
+  const fileDetails = document.getElementById('upload-json-file-details');
+  
+  if (fileInfo && fileName && fileDetails) {
+    fileName.textContent = file.name;
+    fileDetails.textContent = `Size: ${(file.size / 1024).toFixed(2)} KB`;
+    fileInfo.style.display = 'block';
+  }
+
+  // Auto-fill filename if empty
+  const filenameInput = document.getElementById('upload-json-filename');
+  if (filenameInput && !filenameInput.value) {
+    filenameInput.value = file.name;
+  }
+
+  // Auto-fill name if empty
+  const nameInput = document.getElementById('upload-json-name');
+  if (nameInput && !nameInput.value) {
+    const nameWithoutExt = file.name.replace(/\.json$/i, '');
+    nameInput.value = nameWithoutExt.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  }
+}
+
+// Upload JSON file
+async function uploadJsonFile() {
+  const fileInput = document.getElementById('upload-json-file-input');
+  const filenameInput = document.getElementById('upload-json-filename');
+  const nameInput = document.getElementById('upload-json-name');
+  const categorySelect = document.getElementById('upload-json-category');
+  const descriptionInput = document.getElementById('upload-json-description');
+
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    alert('Please select a JSON file to upload.');
+    return;
+  }
+
+  if (!filenameInput || !filenameInput.value.trim()) {
+    alert('Filename is required. Please enter a filename (e.g., my-file-2025-01-15.json).');
+    return;
+  }
+
+  if (!nameInput || !nameInput.value.trim()) {
+    alert('Display name is required.');
+    return;
+  }
+
+  // Ensure filename ends with .json
+  let filename = filenameInput.value.trim();
+  if (!filename.endsWith('.json')) {
+    filename = filename + '.json';
+  }
+
+  const file = fileInput.files[0];
+  const isActiveCheckbox = document.getElementById('upload-json-is-active');
+  const metadata = {
+    filename: filename,
+    name: nameInput.value.trim(),
+    category: categorySelect ? categorySelect.value : 'My Herd',
+    description: descriptionInput ? descriptionInput.value.trim() : '',
+    isActive: isActiveCheckbox ? isActiveCheckbox.checked : false
+  };
+
+  try {
+    const uploadBtn = document.getElementById('upload-json-confirm-btn');
+    if (uploadBtn) {
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Uploading...';
+    }
+
+    // Read file content and send to main process
+    const fileContent = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (e) => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+
+    // Validate JSON
+    try {
+      const jsonData = JSON.parse(fileContent);
+      if (!jsonData.animals || !Array.isArray(jsonData.animals)) {
+        throw new Error('Invalid bulk file format. Expected an object with an "animals" array.');
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        alert('Invalid JSON file: ' + error.message);
+        return;
+      }
+      throw error;
+    }
+
+    // Upload file (main process will handle writing to temp file and uploading)
+    const result = await window.electronAPI.uploadBulkFile(fileContent, metadata);
+
+    if (result.success) {
+      alert(`Bulk file uploaded successfully!\n\nFile: ${result.filename}\nURL: ${result.url}\nAnimals: ${result.animalCount}\n\n${result.message || ''}`);
+      
+      // Close dialog
+      document.getElementById('upload-json-file-dialog').style.display = 'none';
+      
+      // Refresh bulk file status to show the new file
+      if (typeof loadBulkFileStatus === 'function') {
+        loadBulkFileStatus();
+      }
+    } else {
+      alert(`Error uploading bulk file: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error uploading JSON file:', error);
+    alert(`Error: ${error.message}`);
+  } finally {
+    const uploadBtn = document.getElementById('upload-json-confirm-btn');
+    if (uploadBtn) {
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = 'Upload';
+    }
+  }
+}
 
 // Load bulk file status on page load
 loadBulkFileStatus();

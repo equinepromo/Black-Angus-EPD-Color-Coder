@@ -88,10 +88,12 @@ try {
         ]
     );
 
-    // Query for license key (including activeMachineId field)
-    // Note: You'll need to add 'activeMachineId' column to your blackAngus table
+    // Query for license key (including activeMachineId and licenseType fields)
+    // Note: You'll need to add 'activeMachineId' and 'licenseType' columns to your blackAngus table
     // ALTER TABLE blackAngus ADD COLUMN activeMachineId VARCHAR(255) NULL;
-    $stmt = $pdo->prepare("SELECT id, licenseKey, user, expires, activeMachineId FROM blackAngus WHERE licenseKey = ?");
+    // ALTER TABLE blackAngus ADD COLUMN licenseType VARCHAR(50) DEFAULT 'standard';
+    // Use alias to ensure consistent column name regardless of MySQL case sensitivity
+    $stmt = $pdo->prepare("SELECT id, licenseKey, user, expires, activeMachineId, licenseType AS lt FROM blackAngus WHERE licenseKey = ?");
     $stmt->execute([$licenseKey]);
     $license = $stmt->fetch();
 
@@ -102,6 +104,22 @@ try {
             'error' => 'License key not found'
         ]);
         exit;
+    }
+    
+    // Get licenseType from alias or try all case variations
+    $licenseTypeValue = $license['lt'] ?? null;
+    
+    // Fallback: Try all case variations if alias didn't work
+    if (!$licenseTypeValue) {
+        if (isset($license['licenseType'])) {
+            $licenseTypeValue = $license['licenseType'];
+        } elseif (isset($license['licensetype'])) {
+            $licenseTypeValue = $license['licensetype'];
+        } elseif (isset($license['LICENSETYPE'])) {
+            $licenseTypeValue = $license['LICENSETYPE'];
+        } elseif (isset($license['LicenseType'])) {
+            $licenseTypeValue = $license['LicenseType'];
+        }
     }
 
     // Check if license is already bound to a different machine
@@ -153,11 +171,31 @@ try {
     $updateStmt->execute([$machineId, $licenseKey]);
 
     // License is valid
+    // Determine features based on licenseType
+    // Handle case-insensitive comparison and trim whitespace
+    $licenseTypeRaw = $licenseTypeValue;
+    $licenseType = $licenseTypeRaw ? trim(strtolower($licenseTypeRaw)) : 'standard';
+    
+    $features = [];
+    
+    // Admin licenses get all features (case-insensitive check)
+    if ($licenseType === 'admin') {
+        $features = ['importExternalData', 'manageBulkFiles', 'all'];
+    } else {
+        // Standard licenses get basic features only
+        $features = ['basic'];
+    }
+    
+    // Return the original case from database, or 'admin' if it was admin (case-insensitive)
+    $returnLicenseType = ($licenseType === 'admin') ? 'admin' : ($licenseTypeRaw ?? 'standard');
+    
     echo json_encode([
         'valid' => true,
         'userName' => $license['user'] ?: null,
         'expiresAt' => $expiresAt,
-        'machineId' => $machineId
+        'machineId' => $machineId,
+        'licenseType' => $returnLicenseType,
+        'features' => $features
     ]);
 
     // Optional: Log the validation request (uncomment if you want to track usage)

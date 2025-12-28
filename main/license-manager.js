@@ -224,7 +224,10 @@ async function validateLicense(forceRefresh = false) {
   }
 
   // Check cached validation if not forcing refresh
-  if (!forceRefresh && licenseData.lastValidation) {
+  // BUT: If cached data doesn't have licenseType/features, force refresh to get them
+  const needsRefresh = !licenseData.licenseType || !licenseData.features || licenseData.features.length === 0;
+  
+  if (!forceRefresh && !needsRefresh && licenseData.lastValidation) {
     const lastValidation = new Date(licenseData.lastValidation);
     const now = new Date();
     const timeSinceValidation = now - lastValidation;
@@ -238,7 +241,9 @@ async function validateLicense(forceRefresh = false) {
           activated: true,
           cached: true,
           expiresAt: licenseData.expiresAt,
-          userName: licenseData.userName
+          userName: licenseData.userName,
+          licenseType: licenseData.licenseType || 'standard',
+          features: licenseData.features || []
         };
       } else {
         // Check if we're still in grace period
@@ -256,12 +261,19 @@ async function validateLicense(forceRefresh = false) {
               cached: true,
               offline: true,
               expiresAt: licenseData.expiresAt,
-              userName: licenseData.userName
+              userName: licenseData.userName,
+              licenseType: licenseData.licenseType || 'standard',
+              features: licenseData.features || []
             };
           }
         }
       }
     }
+  }
+  
+  // Force refresh if licenseType/features are missing
+  if (needsRefresh) {
+    console.log('[LICENSE] Cached data missing licenseType/features, forcing refresh');
   }
 
   // Validate with server
@@ -276,6 +288,8 @@ async function validateLicense(forceRefresh = false) {
     licenseData.lastSuccessfulValidation = new Date().toISOString();
     licenseData.userName = validation.userName || null;
     licenseData.expiresAt = validation.expiresAt || null;
+    licenseData.licenseType = validation.licenseType || 'standard';
+    licenseData.features = validation.features || [];
   } else {
     licenseData.error = validation.error || 'License validation failed';
   }
@@ -289,7 +303,9 @@ async function validateLicense(forceRefresh = false) {
     offline: validation.offline || false,
     error: validation.error || null,
     expiresAt: validation.expiresAt || licenseData.expiresAt,
-    userName: validation.userName || licenseData.userName
+    userName: validation.userName || licenseData.userName,
+    licenseType: validation.licenseType || licenseData.licenseType || 'standard',
+    features: validation.features || licenseData.features || []
   };
 }
 
@@ -325,7 +341,9 @@ async function activateLicense(licenseKey) {
     lastSuccessfulValidation: new Date().toISOString(),
     valid: true,
     userName: validation.userName || null,
-    expiresAt: validation.expiresAt || null
+    expiresAt: validation.expiresAt || null,
+    licenseType: validation.licenseType || 'standard',
+    features: validation.features || []
   };
 
   if (saveLicenseData(licenseData)) {
@@ -380,7 +398,9 @@ function getLicenseStatus() {
     valid: licenseData.valid === true,
     userName: licenseData.userName || null,
     expiresAt: licenseData.expiresAt || null,
-    lastValidation: licenseData.lastValidation || null
+    lastValidation: licenseData.lastValidation || null,
+    licenseType: licenseData.licenseType || 'standard',
+    features: licenseData.features || []
   };
 }
 

@@ -183,6 +183,40 @@ UPDATE blackAngus SET expires = '2020-01-01 00:00:00' WHERE licenseKey = 'REVOKE
 
 The app will check the license within 24 hours and block access if it's invalid.
 
+## Bulk Files Database (Optional)
+
+The server also supports a database-driven bulk files manifest system, which replaces the static `manifest.json` file.
+
+### Setup
+
+1. **Create the database table**:
+   ```bash
+   mysql -u your_user -p appUsers < bulk-files-schema.sql
+   ```
+
+2. **Update database credentials** in `get-manifest.php` (same as `validate.php`)
+
+3. **Upload `get-manifest.php`** to your web server
+
+4. **Add bulk files to database** (see `BULK_FILES_DATABASE.md` for details)
+
+5. **Test the endpoint**:
+   ```bash
+   curl https://your-domain.com/get-manifest.php
+   ```
+
+The app will automatically use this endpoint instead of downloading `manifest.json`.
+
+### Migrating from manifest.json
+
+If you have an existing `manifest.json` file, you can migrate it:
+
+```bash
+php migrate-manifest-to-db.php path/to/manifest.json
+```
+
+See `BULK_FILES_DATABASE.md` for complete documentation.
+
 ## Troubleshooting
 
 **500 Internal Server Error:**
