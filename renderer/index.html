@@ -134,7 +134,17 @@
                 <button id="export-selected-bulk-file-btn" class="btn btn-secondary" style="margin-left: 10px;" disabled>Export Selected to Bulk File</button>
                 <button id="export-category-bulk-file-btn" class="btn btn-secondary" style="margin-left: 10px;">Export Category to Bulk File</button>
                 <button id="manage-categories-btn" class="btn btn-secondary" style="margin-left: 10px;">Manage Categories</button>
-                <button id="delete-category-btn" class="btn btn-secondary" style="margin-left: 10px;">Delete Category Animals</button>
+                <button id="delete-category-btn" class="btn btn-secondary" style="margin-left: 10px;">Delete Animals from Category</button>
+            </div>
+            
+            <!-- Backup & Restore Section -->
+            <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; border: 1px solid #ddd;">
+                <h3 style="margin: 0 0 10px 0; font-size: 1.1em;">Backup & Restore</h3>
+                <p style="margin: 0 0 15px 0; color: #666; font-size: 0.9em;">Create a backup of all your cached animals and categories, or restore from a previous backup.</p>
+                <div style="display: flex; gap: 10px;">
+                    <button id="create-backup-btn" class="btn btn-primary">Create Backup</button>
+                    <button id="restore-backup-btn" class="btn btn-secondary">Restore from Backup</button>
+                </div>
             </div>
 
             <div class="results-section" style="margin-top: 15px;">
@@ -324,7 +334,6 @@
             
             <div class="button-group" style="margin-bottom: 15px;">
                 <button id="check-bulk-updates-btn" class="btn btn-primary">Check for Updates</button>
-                <button id="refresh-bulk-status-btn" class="btn btn-secondary">Refresh Status</button>
                 <button id="import-external-data-btn" class="btn btn-primary">Import External Data</button>
                 <button id="upload-json-file-btn" class="btn btn-primary" style="display: none;">Upload JSON File</button>
             </div>
@@ -494,6 +503,37 @@
                 <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px;">
                     <button id="upload-json-cancel-btn" class="btn btn-secondary">Cancel</button>
                     <button id="upload-json-confirm-btn" class="btn btn-primary">Upload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore Backup Dialog -->
+    <div id="restore-backup-dialog" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #ddd;">
+                <h2 style="margin: 0;">Restore from Backup</h2>
+                <button id="close-restore-backup-dialog-btn">✕ Close</button>
+            </div>
+            <div style="margin-top: 20px;">
+                <p style="margin-bottom: 15px;">Select restore options:</p>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="restore-overwrite-existing" style="width: 18px; height: 18px; cursor: pointer;">
+                        <span style="font-weight: bold;">Overwrite existing animals</span>
+                    </label>
+                    <small style="color: #666; display: block; margin-top: 5px; margin-left: 26px;">If checked, animals with the same registration number will be replaced. If unchecked, existing animals will be skipped.</small>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="restore-categories" checked style="width: 18px; height: 18px; cursor: pointer;">
+                        <span style="font-weight: bold;">Restore categories</span>
+                    </label>
+                    <small style="color: #666; display: block; margin-top: 5px; margin-left: 26px;">If checked, categories from the backup will be added to your existing categories.</small>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px;">
+                    <button id="restore-backup-cancel-btn" class="btn btn-secondary">Cancel</button>
+                    <button id="restore-backup-confirm-btn" class="btn btn-primary">Restore</button>
                 </div>
             </div>
         </div>

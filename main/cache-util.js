@@ -657,19 +657,20 @@ function removeCategoryFromAnimals(category) {
 }
 
 /**
- * Delete all animals that have a specific category (actually deletes cache files)
- * @param {string} category - Category to delete animals from
- * @returns {Object} Result object with success status and deleted count
+ * Remove a category from all animals that have it (deletes animals that are ONLY in that category)
+ * @param {string} category - Category to remove from animals
+ * @returns {Object} Result object with success status and updated/deleted counts
  */
 function deleteAnimalsByCategory(category) {
   try {
     const cacheDir = ensureCacheDir();
     if (!fs.existsSync(cacheDir)) {
-      return { success: true, deletedCount: 0 };
+      return { success: true, updatedCount: 0, deletedCount: 0 };
     }
     
     const files = fs.readdirSync(cacheDir);
     const epdFiles = files.filter(f => f.startsWith('epd_') && f.endsWith('.json'));
+    let updatedCount = 0;
     let deletedCount = 0;
     
     epdFiles.forEach(file => {
@@ -687,22 +688,38 @@ function deleteAnimalsByCategory(category) {
         // Get existing categories
         const existingCategories = getCategoriesFromCached(cached);
         
-        // Check if this animal has the category to delete
+        // Check if this animal has the category to remove
         if (existingCategories.includes(category)) {
-          // Actually delete the cache file
-          fs.unlinkSync(filePath);
-          deletedCount++;
-          console.log(`[CACHE] Deleted animal with category ${category}: ${file}`);
+          // Remove the category
+          const updatedCategories = existingCategories.filter(cat => cat !== category);
+          
+          // If animal has other categories, just remove this one
+          if (updatedCategories.length > 0) {
+            // Update cache with remaining categories
+            cached.categories = updatedCategories;
+            if (cached.category) {
+              delete cached.category; // Remove old format
+            }
+            
+            fs.writeFileSync(filePath, JSON.stringify(cached, null, 2), 'utf8');
+            updatedCount++;
+            console.log(`[CACHE] Removed category ${category} from animal (still has other categories): ${file}`);
+          } else {
+            // Animal has ONLY this category - delete the animal entirely
+            fs.unlinkSync(filePath);
+            deletedCount++;
+            console.log(`[CACHE] Deleted animal that was only in category ${category}: ${file}`);
+          }
         }
       } catch (error) {
         console.error(`[CACHE] Error processing file ${file}:`, error);
       }
     });
     
-    console.log(`[CACHE] Deleted ${deletedCount} animals with category: ${category}`);
-    return { success: true, deletedCount };
+    console.log(`[CACHE] Removed category ${category} from ${updatedCount} animals, deleted ${deletedCount} animals that were only in that category`);
+    return { success: true, updatedCount, deletedCount };
   } catch (error) {
-    console.error(`[CACHE] Error deleting animals by category ${category}:`, error);
+    console.error(`[CACHE] Error removing category from animals: ${category}:`, error);
     return { success: false, error: error.message };
   }
 }
@@ -918,6 +935,152 @@ function deleteCategory(categoryName) {
   }
 }
 
+/**
+ * Create a backup of all cached animals and categories
+ * @returns {Object} Backup data object with animals and categories
+ */
+function createBackup() {
+  try {
+    console.log('[CACHE] Creating backup of all cached data...');
+    
+    // Get all cached animals with full data
+    const animals = getCachedAnimalsWithData();
+    
+    // Get all categories
+    const categories = loadCategories();
+    
+    // Get cache stats
+    const stats = getCacheStats();
+    
+    // Create backup object
+    const backup = {
+      version: '1.0',
+      createdAt: new Date().toISOString(),
+      animalCount: animals.length,
+      categories: categories,
+      stats: {
+        totalFiles: stats.totalFiles,
+        totalSize: stats.totalSize
+      },
+      animals: animals.map(animal => {
+        // Include all data from cache file structure
+        return {
+          registrationNumber: animal.registrationNumber,
+          data: animal,
+          cachedAt: animal.cachedAt || new Date().toISOString(),
+          categories: animal.categories || (animal.category ? [animal.category] : ['My Herd'])
+        };
+      })
+    };
+    
+    console.log(`[CACHE] Backup created: ${animals.length} animals, ${categories.length} categories`);
+    return { success: true, backup };
+  } catch (error) {
+    console.error('[CACHE] Error creating backup:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Restore animals and categories from a backup
+ * @param {Object} backup - Backup data object
+ * @param {Object} options - Restore options
+ * @param {boolean} options.overwriteExisting - If true, overwrite existing animals; if false, skip existing (default: false)
+ * @param {boolean} options.restoreCategories - If true, restore categories list (default: true)
+ * @returns {Object} Result object with success status and counts
+ */
+function restoreBackup(backup, options = {}) {
+  try {
+    const { overwriteExisting = false, restoreCategories = true } = options;
+    
+    console.log('[CACHE] Restoring backup...');
+    console.log(`[CACHE] Backup version: ${backup.version || 'unknown'}, Created: ${backup.createdAt || 'unknown'}`);
+    console.log(`[CACHE] Animals in backup: ${backup.animals?.length || 0}`);
+    console.log(`[CACHE] Options: overwriteExisting=${overwriteExisting}, restoreCategories=${restoreCategories}`);
+    
+    if (!backup.animals || !Array.isArray(backup.animals)) {
+      return { success: false, error: 'Invalid backup format: missing animals array' };
+    }
+    
+    let restoredCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+    
+    // Restore categories first if requested
+    if (restoreCategories && backup.categories && Array.isArray(backup.categories)) {
+      console.log(`[CACHE] Restoring ${backup.categories.length} categories...`);
+      const existingCategories = loadCategories();
+      const categoriesToAdd = backup.categories.filter(cat => !existingCategories.includes(cat));
+      
+      if (categoriesToAdd.length > 0) {
+        const allCategories = [...existingCategories, ...categoriesToAdd];
+        saveCategories(allCategories);
+        console.log(`[CACHE] Added ${categoriesToAdd.length} new categories`);
+      }
+    }
+    
+    // Restore animals
+    for (const animalBackup of backup.animals) {
+      try {
+        const registrationNumber = animalBackup.registrationNumber || animalBackup.data?.registrationNumber;
+        if (!registrationNumber) {
+          console.warn('[CACHE] Skipping animal with no registration number');
+          errorCount++;
+          continue;
+        }
+        
+        const cacheKey = `epd_${registrationNumber}`;
+        const cacheFilePath = getCacheFilePath(cacheKey);
+        
+        // Check if animal already exists
+        if (!overwriteExisting && fs.existsSync(cacheFilePath)) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Get animal data (support both old and new backup formats)
+        const animalData = animalBackup.data || animalBackup;
+        const categories = animalBackup.categories || 
+                          (animalBackup.category ? [animalBackup.category] : ['My Herd']);
+        const cachedAt = animalBackup.cachedAt || new Date().toISOString();
+        
+        // Save to cache
+        saveCache(cacheKey, animalData, categories);
+        
+        // Update cachedAt timestamp if provided
+        if (cachedAt && fs.existsSync(cacheFilePath)) {
+          try {
+            const cacheContent = fs.readFileSync(cacheFilePath, 'utf8');
+            const cached = JSON.parse(cacheContent);
+            cached.cachedAt = cachedAt;
+            fs.writeFileSync(cacheFilePath, JSON.stringify(cached, null, 2), 'utf8');
+          } catch (e) {
+            // Non-fatal error, continue
+            console.warn(`[CACHE] Could not update cachedAt for ${registrationNumber}`);
+          }
+        }
+        
+        restoredCount++;
+      } catch (error) {
+        console.error(`[CACHE] Error restoring animal ${animalBackup.registrationNumber}:`, error.message);
+        errorCount++;
+      }
+    }
+    
+    console.log(`[CACHE] Restore complete: ${restoredCount} restored, ${skippedCount} skipped, ${errorCount} errors`);
+    return {
+      success: true,
+      restoredCount,
+      skippedCount,
+      errorCount,
+      totalInBackup: backup.animals.length
+    };
+  } catch (error) {
+    console.error('[CACHE] Error restoring backup:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   loadCache,
   saveCache,
@@ -941,6 +1104,8 @@ module.exports = {
   getCachedAnimalsWithData,
   isCacheValid,
   initializeCacheDir,
-  CACHE_EXPIRY_DAYS
+  CACHE_EXPIRY_DAYS,
+  createBackup,
+  restoreBackup
 };
 

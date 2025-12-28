@@ -3011,6 +3011,112 @@ if (exportCategoryBulkFileBtn) {
   });
 }
 
+// Backup and restore buttons
+const createBackupBtn = document.getElementById('create-backup-btn');
+if (createBackupBtn) {
+  createBackupBtn.addEventListener('click', createBackup);
+}
+
+const restoreBackupBtn = document.getElementById('restore-backup-btn');
+if (restoreBackupBtn) {
+  restoreBackupBtn.addEventListener('click', showRestoreBackupDialog);
+}
+
+// Restore backup dialog buttons
+const restoreBackupCancelBtn = document.getElementById('restore-backup-cancel-btn');
+if (restoreBackupCancelBtn) {
+  restoreBackupCancelBtn.addEventListener('click', () => {
+    document.getElementById('restore-backup-dialog').style.display = 'none';
+  });
+}
+
+const restoreBackupCloseBtn = document.getElementById('close-restore-backup-dialog-btn');
+if (restoreBackupCloseBtn) {
+  restoreBackupCloseBtn.addEventListener('click', () => {
+    document.getElementById('restore-backup-dialog').style.display = 'none';
+  });
+}
+
+const restoreBackupConfirmBtn = document.getElementById('restore-backup-confirm-btn');
+if (restoreBackupConfirmBtn) {
+  restoreBackupConfirmBtn.addEventListener('click', restoreBackup);
+}
+
+// Create backup of all cached animals and categories
+async function createBackup() {
+  try {
+    const result = await window.electronAPI.createBackup();
+    
+    if (result.canceled) {
+      return; // User canceled
+    }
+    
+    if (!result.success) {
+      alert(`Error creating backup: ${result.error || 'Unknown error'}`);
+      return;
+    }
+    
+    alert(`Backup created successfully!\n\nFile: ${result.filePath}\nAnimals: ${result.animalCount}\nCategories: ${result.categoryCount}\n\nYour backup has been saved.`);
+  } catch (error) {
+    console.error('Error creating backup:', error);
+    alert(`Error creating backup: ${error.message || 'Unknown error'}`);
+  }
+}
+
+// Show restore backup dialog
+function showRestoreBackupDialog() {
+  const dialog = document.getElementById('restore-backup-dialog');
+  if (!dialog) return;
+  
+  // Reset checkboxes
+  document.getElementById('restore-overwrite-existing').checked = false;
+  document.getElementById('restore-categories').checked = true;
+  
+  dialog.style.display = 'block';
+}
+
+// Restore from backup
+async function restoreBackup() {
+  const overwriteExisting = document.getElementById('restore-overwrite-existing').checked;
+  const restoreCategories = document.getElementById('restore-categories').checked;
+  
+  // Close dialog
+  document.getElementById('restore-backup-dialog').style.display = 'none';
+  
+  try {
+    const result = await window.electronAPI.restoreBackup({
+      overwriteExisting,
+      restoreCategories
+    });
+    
+    if (result.canceled) {
+      return; // User canceled
+    }
+    
+    if (!result.success) {
+      alert(`Error restoring backup: ${result.error || 'Unknown error'}`);
+      return;
+    }
+    
+    const message = `Backup restored successfully!\n\n` +
+      `Animals restored: ${result.restoredCount}\n` +
+      `Animals skipped: ${result.skippedCount}\n` +
+      `Errors: ${result.errorCount}\n` +
+      `Total in backup: ${result.totalInBackup}\n\n` +
+      `Please refresh your herd inventory to see the restored animals.`;
+    
+    alert(message);
+    
+    // Refresh inventory if available
+    if (typeof refreshInventory === 'function') {
+      refreshInventory();
+    }
+  } catch (error) {
+    console.error('Error restoring backup:', error);
+    alert(`Error restoring backup: ${error.message || 'Unknown error'}`);
+  }
+}
+
 // Helper function to normalize categories for display/filtering
 function normalizeCategoriesForDisplay(categoryOrArray) {
   if (!categoryOrArray) return ['My Herd'];
@@ -3256,12 +3362,16 @@ if (deleteCategoryBtn) {
       const categoryToDelete = categorySelect.value;
       
       if (availableCategories.includes(categoryToDelete)) {
-        const confirmMessage = `Are you sure you want to delete ALL animals in the "${categoryToDelete}" category?\n\nThis action cannot be undone.`;
+        const confirmMessage = `Are you sure you want to remove the "${categoryToDelete}" category from all animals?\n\nAnimals with multiple categories will keep their other categories. Animals that are ONLY in this category will be deleted.\n\nThis action cannot be undone.`;
         if (confirm(confirmMessage)) {
             try {
             const result = await window.electronAPI.deleteAnimalsByCategory(categoryToDelete);
             if (result.success) {
-              alert(`Successfully deleted ${result.deletedCount} animal(s) from category "${categoryToDelete}".`);
+              let message = `Successfully removed category "${categoryToDelete}" from ${result.updatedCount} animal(s).`;
+              if (result.deletedCount > 0) {
+                message += `\n\n${result.deletedCount} animal(s) that were only in this category have been deleted.`;
+              }
+              alert(message);
               // Reload inventory to get fresh data
               await loadInventory();
               selectedAnimals.clear();
@@ -3270,10 +3380,10 @@ if (deleteCategoryBtn) {
               loadCachedAnimals();
               document.body.removeChild(dialog);
             } else {
-              alert('Error deleting animals: ' + (result.error || 'Unknown error'));
+              alert('Error removing category: ' + (result.error || 'Unknown error'));
             }
           } catch (error) {
-            alert('Error deleting animals: ' + error.message);
+            alert('Error removing category: ' + error.message);
           }
         }
       } else {
@@ -4688,12 +4798,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkUpdatesBtn = document.getElementById('check-bulk-updates-btn');
   if (checkUpdatesBtn) {
     checkUpdatesBtn.addEventListener('click', checkBulkFileUpdates);
-  }
-
-  // Refresh status button
-  const refreshStatusBtn = document.getElementById('refresh-bulk-status-btn');
-  if (refreshStatusBtn) {
-    refreshStatusBtn.addEventListener('click', loadBulkFileStatus);
   }
 
   // Close import dialog button

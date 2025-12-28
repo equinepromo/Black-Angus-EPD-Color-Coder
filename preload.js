@@ -77,6 +77,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   uploadBulkFile: (filePath, metadata) => ipcRenderer.invoke('upload-bulk-file', filePath, metadata),
   // Admin bulk file management APIs
   toggleBulkFileActive: (filename, isActive) => ipcRenderer.invoke('toggle-bulk-file-active', filename, isActive),
-  deleteBulkFile: (filename) => ipcRenderer.invoke('delete-bulk-file', filename)
+  deleteBulkFile: (filename) => ipcRenderer.invoke('delete-bulk-file', filename),
+  // Backup and restore APIs
+  createBackup: () => ipcRenderer.invoke('create-backup'),
+  restoreBackup: (options) => ipcRenderer.invoke('restore-backup', options)
 });
 

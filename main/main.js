@@ -650,6 +650,112 @@ ipcMain.handle('delete-animals-by-category', async (event, category) => {
   return cacheUtil.deleteAnimalsByCategory(category);
 });
 
+// Create backup of all cached animals and categories
+ipcMain.handle('create-backup', async (event) => {
+  console.log('[MAIN] create-backup called');
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  try {
+    // Create backup
+    const result = cacheUtil.createBackup();
+    
+    if (!result.success) {
+      return result;
+    }
+    
+    // Show save dialog
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Backup File',
+      defaultPath: `angus-backup-${new Date().toISOString().split('T')[0]}.json`,
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (canceled || !filePath) {
+      return { success: false, canceled: true };
+    }
+    
+    // Write backup to file
+    fs.writeFileSync(filePath, JSON.stringify(result.backup, null, 2), 'utf8');
+    
+    console.log(`[MAIN] Backup saved to: ${filePath}`);
+    return {
+      success: true,
+      filePath,
+      animalCount: result.backup.animalCount,
+      categoryCount: result.backup.categories?.length || 0
+    };
+  } catch (error) {
+    console.error('[MAIN] Error creating backup:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Restore from backup file
+ipcMain.handle('restore-backup', async (event, options = {}) => {
+  console.log('[MAIN] restore-backup called');
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  try {
+    // Show open dialog
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Backup File to Restore',
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+    
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    
+    const filePath = filePaths[0];
+    
+    // Read backup file
+    const backupContent = fs.readFileSync(filePath, 'utf8');
+    const backup = JSON.parse(backupContent);
+    
+    // Validate backup format
+    if (!backup.animals || !Array.isArray(backup.animals)) {
+      return { success: false, error: 'Invalid backup file format. Expected an object with an "animals" array.' };
+    }
+    
+    // Restore backup
+    const restoreOptions = {
+      overwriteExisting: options.overwriteExisting || false,
+      restoreCategories: options.restoreCategories !== false // Default to true
+    };
+    
+    const result = cacheUtil.restoreBackup(backup, restoreOptions);
+    
+    if (result.success) {
+      console.log(`[MAIN] Backup restored: ${result.restoredCount} animals restored, ${result.skippedCount} skipped`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[MAIN] Error restoring backup:', error);
+    if (error instanceof SyntaxError) {
+      return { success: false, error: 'Invalid JSON file: ' + error.message };
+    }
+    return { success: false, error: error.message };
+  }
+});
+
 // Parse external file (Excel, CSV, text)
 ipcMain.handle('parse-external-file', async (event, filePath) => {
   console.log('[MAIN] parse-external-file called for:', filePath);
