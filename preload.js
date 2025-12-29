@@ -80,6 +80,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteBulkFile: (filename) => ipcRenderer.invoke('delete-bulk-file', filename),
   // Backup and restore APIs
   createBackup: () => ipcRenderer.invoke('create-backup'),
-  restoreBackup: (options) => ipcRenderer.invoke('restore-backup', options)
+  restoreBackup: (options) => ipcRenderer.invoke('restore-backup', options),
+  listAutoBackups: () => ipcRenderer.invoke('list-auto-backups'),
+  restoreAutoBackup: (backupPath, options) => ipcRenderer.invoke('restore-auto-backup', backupPath, options)
 });
 

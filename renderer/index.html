@@ -56,16 +56,26 @@
             </div>
         </div>
 
+        <!-- Global Actions Toolbar -->
+        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 10px; padding: 6px 10px; background-color: #f8f9fa; border-radius: 4px; font-size: 0.85em;">
+            <!-- Backup & Restore -->
+            <button id="create-backup-btn" class="btn btn-secondary" style="font-size: 0.85em; padding: 4px 10px;">Create Backup</button>
+            <button id="restore-backup-btn" class="btn btn-secondary" style="font-size: 0.85em; padding: 4px 10px;">Restore</button>
+            
+            <!-- Manage Categories -->
+            <button id="manage-categories-global-btn" class="btn btn-secondary" style="font-size: 0.85em; padding: 4px 10px;">Manage Categories</button>
+        </div>
+
         <!-- Tab Navigation -->
         <div class="tabs-container">
-            <button class="tab-button active" data-tab="animal-entry">Animal Entry</button>
-            <button class="tab-button" data-tab="herd-inventory">Herd Inventory</button>
+            <button class="tab-button" data-tab="animal-entry">Animal Entry</button>
+            <button class="tab-button active" data-tab="herd-inventory">Herd Inventory</button>
             <button class="tab-button" data-tab="mating-calculator">Mating Calculator</button>
             <button class="tab-button" data-tab="bulk-files">Bulk Files</button>
         </div>
 
         <!-- Animal Entry Tab -->
-        <div id="animal-entry-tab" class="tab-content active">
+        <div id="animal-entry-tab" class="tab-content">
         <div class="input-section">
             <h2 style="margin-bottom: 20px; color: #333;">Animal Entry</h2>
             <div class="input-group">
@@ -114,7 +124,7 @@
         </div>
 
         <!-- Herd Inventory Tab -->
-        <div id="herd-inventory-tab" class="tab-content">
+        <div id="herd-inventory-tab" class="tab-content active">
         <div class="input-section">
             <h2 style="margin-bottom: 20px; color: #333;">Herd Inventory</h2>
             
@@ -133,18 +143,7 @@
                 <button id="bulk-change-category-btn" class="btn btn-secondary" style="margin-left: 10px;" disabled>Change Category (<span id="selected-count-2">0</span>)</button>
                 <button id="export-selected-bulk-file-btn" class="btn btn-secondary" style="margin-left: 10px;" disabled>Export Selected to Bulk File</button>
                 <button id="export-category-bulk-file-btn" class="btn btn-secondary" style="margin-left: 10px;">Export Category to Bulk File</button>
-                <button id="manage-categories-btn" class="btn btn-secondary" style="margin-left: 10px;">Manage Categories</button>
                 <button id="delete-category-btn" class="btn btn-secondary" style="margin-left: 10px;">Delete Animals from Category</button>
-            </div>
-            
-            <!-- Backup & Restore Section -->
-            <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; border: 1px solid #ddd;">
-                <h3 style="margin: 0 0 10px 0; font-size: 1.1em;">Backup & Restore</h3>
-                <p style="margin: 0 0 15px 0; color: #666; font-size: 0.9em;">Create a backup of all your cached animals and categories, or restore from a previous backup.</p>
-                <div style="display: flex; gap: 10px;">
-                    <button id="create-backup-btn" class="btn btn-primary">Create Backup</button>
-                    <button id="restore-backup-btn" class="btn btn-secondary">Restore from Backup</button>
-                </div>
             </div>
 
             <div class="results-section" style="margin-top: 15px;">
@@ -407,9 +406,9 @@
                 <div id="external-import-step2" style="display: none; margin-top: 20px;">
                     <h3 style="margin-bottom: 15px;">Column Mapping</h3>
                     <p style="margin-bottom: 15px; color: #666; font-size: 0.9em;">
-                        Map your file columns to the bulk file format. Required fields are marked with *.
+                        Map your file columns to the bulk file format. Required fields are marked with *. Unmapped columns will be stored as additional information.
                     </p>
-                    <div id="column-mapping-container" style="margin-bottom: 20px;">
+                    <div id="column-mapping-container" style="margin-bottom: 20px; max-height: 500px; overflow-y: auto; padding: 10px; border: 1px solid #ddd; border-radius: 4px; background-color: #f9f9f9;">
                         <!-- Column mappings will be populated here -->
                     </div>
                     <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -510,13 +509,40 @@
 
     <!-- Restore Backup Dialog -->
     <div id="restore-backup-dialog" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #ddd;">
                 <h2 style="margin: 0;">Restore from Backup</h2>
                 <button id="close-restore-backup-dialog-btn">✕ Close</button>
             </div>
             <div style="margin-top: 20px;">
-                <p style="margin-bottom: 15px;">Select restore options:</p>
+                <!-- Auto-backups section -->
+                <div style="margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 1em; color: #333;">Auto-Backups</h3>
+                    <p style="margin: 0 0 10px 0; color: #666; font-size: 0.9em;">Select from automatically created backups:</p>
+                    <div id="auto-backups-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; background-color: #f9f9f9;">
+                        <div style="text-align: center; color: #999; padding: 20px;">Loading backups...</div>
+                    </div>
+                    <button id="refresh-auto-backups-btn" class="btn btn-secondary" style="margin-top: 10px; font-size: 0.9em;">Refresh List</button>
+                </div>
+                
+                <!-- Divider -->
+                <div style="margin: 20px 0; border-top: 1px solid #ddd; text-align: center;">
+                    <span style="background-color: white; padding: 0 10px; color: #666; font-size: 0.9em;">OR</span>
+                </div>
+                
+                <!-- Manual file selection -->
+                <div style="margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 1em; color: #333;">Select Backup File</h3>
+                    <button id="select-backup-file-btn" class="btn btn-secondary" style="width: 100%;">Choose Backup File...</button>
+                </div>
+                
+                <!-- Selected backup info -->
+                <div id="selected-backup-info" style="display: none; margin-bottom: 15px; padding: 10px; background-color: #e8f4f8; border-radius: 4px; border: 1px solid #b3d9e6;">
+                    <div style="font-weight: bold; margin-bottom: 5px;">Selected Backup:</div>
+                    <div id="selected-backup-details" style="font-size: 0.9em; color: #666;"></div>
+                </div>
+                
+                <!-- Restore options -->
                 <div style="margin-bottom: 15px;">
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                         <input type="checkbox" id="restore-overwrite-existing" style="width: 18px; height: 18px; cursor: pointer;">
@@ -533,7 +559,7 @@
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px;">
                     <button id="restore-backup-cancel-btn" class="btn btn-secondary">Cancel</button>
-                    <button id="restore-backup-confirm-btn" class="btn btn-primary">Restore</button>
+                    <button id="restore-backup-confirm-btn" class="btn btn-primary" disabled>Restore</button>
                 </div>
             </div>
         </div>

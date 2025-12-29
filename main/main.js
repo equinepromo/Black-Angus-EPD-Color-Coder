@@ -14,6 +14,7 @@ const matingRanker = require('./mating-ranker');
 const bulkFileManager = require('./bulk-file-manager');
 const bulkFileProcessor = require('./bulk-file-processor');
 const externalDataParser = require('./external-data-parser');
+const backupManager = require('./backup-manager');
 
 let mainWindow;
 let scrapingQueue = [];
@@ -327,10 +328,42 @@ app.whenReady().then(async () => {
   }, 24 * 60 * 60 * 1000); // Check every 24 hours
 });
 
+// Track if we've already created a backup for this quit attempt
+// This flag persists and prevents creating multiple backups
+let hasBackedUpForQuit = false;
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// Handle app quit - create auto-backup before quitting
+// Since createAutoBackup is synchronous, we can do it without preventing quit
+app.on('before-quit', (event) => {
+  // If we've already backed up for this quit, just let it proceed
+  if (hasBackedUpForQuit) {
+    return;
+  }
+  
+  // Set flag immediately to prevent multiple backups
+  hasBackedUpForQuit = true;
+  
+  console.log('[MAIN] App quitting, creating auto-backup...');
+  try {
+    // createAutoBackup is synchronous, so it will complete before quit proceeds
+    const backupResult = backupManager.createAutoBackup();
+    if (backupResult.success) {
+      console.log(`[MAIN] Auto-backup created successfully: ${backupResult.filename}`);
+    } else {
+      console.error('[MAIN] Failed to create auto-backup:', backupResult.error);
+    }
+  } catch (error) {
+    console.error('[MAIN] Error creating auto-backup on quit:', error);
+  }
+  
+  // Don't prevent quit - let it proceed naturally
+  // The backup is synchronous so it will complete before the app actually quits
 });
 
 // IPC Handlers for license
@@ -752,6 +785,49 @@ ipcMain.handle('restore-backup', async (event, options = {}) => {
     if (error instanceof SyntaxError) {
       return { success: false, error: 'Invalid JSON file: ' + error.message };
     }
+    return { success: false, error: error.message };
+  }
+});
+
+// List all auto-backups
+ipcMain.handle('list-auto-backups', async (event) => {
+  console.log('[MAIN] list-auto-backups called');
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  try {
+    const backups = backupManager.listAutoBackups();
+    return { success: true, backups };
+  } catch (error) {
+    console.error('[MAIN] Error listing auto-backups:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Restore from an auto-backup
+ipcMain.handle('restore-auto-backup', async (event, backupPath, options = {}) => {
+  console.log('[MAIN] restore-auto-backup called for:', backupPath);
+  
+  // Check license before allowing operation
+  const licenseStatus = await licenseManager.validateLicense();
+  if (!licenseStatus.valid) {
+    return { success: false, error: 'License invalid. Please activate the application.' };
+  }
+  
+  try {
+    const result = backupManager.restoreAutoBackup(backupPath, options);
+    
+    if (result.success) {
+      console.log(`[MAIN] Auto-backup restored: ${result.restoredCount} animals restored, ${result.skippedCount} skipped`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[MAIN] Error restoring auto-backup:', error);
     return { success: false, error: error.message };
   }
 });

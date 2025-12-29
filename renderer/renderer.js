@@ -75,6 +75,10 @@ const progressFill = document.getElementById('progress-fill');
 const progressText = document.getElementById('progress-text');
 const mainResultsContainer = document.getElementById('main-results-container');
 const matingResultsContainer = document.getElementById('mating-results-container');
+
+// Track selected animals for Animal Entry page (separate from herd inventory)
+let selectedEntryAnimals = new Set();
+let lastClickedEntryCheckbox = null; // Track last clicked checkbox for shift-click range selection
 const sireInput = document.getElementById('sire-input');
 const damInput = document.getElementById('dam-input');
 const sireDropdown = document.getElementById('sire-dropdown');
@@ -195,6 +199,8 @@ scrapeBtn.addEventListener('click', async () => {
   scrapeBtn.disabled = true;
   mainResultsContainer.innerHTML = '';
   scrapedData = [];
+  selectedEntryAnimals.clear(); // Clear selected animals when starting new process
+  lastClickedEntryCheckbox = null; // Reset last clicked checkbox
   showProgress(0, registrationNumbers.length);
 
   // Get selected category
@@ -594,6 +600,11 @@ async function scoreAnimal(animalData, animalType, gateTraits = []) {
 async function displayResults(results) {
   mainResultsContainer.innerHTML = '';
 
+  // Ensure categories are loaded
+  if (availableCategories.length === 0) {
+    await loadCategoriesFromConfig();
+  }
+
   // Remove internal flags from data before displaying
   results = results.map(r => {
     if (r.success && r.data && r.data._fromCache !== undefined) {
@@ -775,7 +786,7 @@ async function displayResults(results) {
 
   // Define additional info columns (Name first, then Registration Number, then others)
   const additionalInfoColumns = ['Sire', 'Dam', 'MGS', 'BD', 'Tattoo'];
-  const headers = ['Name', 'Registration Number', 'Score', ...additionalInfoColumns, ...sortedTraits];
+  const headers = ['Select', 'Name', 'Registration Number', 'Score', ...additionalInfoColumns, ...sortedTraits, 'Actions'];
   
   // Load saved column visibility preferences
   const savedPreferences = loadColumnVisibilityPreferences();
@@ -792,27 +803,83 @@ async function displayResults(results) {
 
   headers.forEach((header, index) => {
     const th = document.createElement('th');
-    th.textContent = header;
     th.style.padding = '8px';
     th.style.border = '1px solid #000';
     th.style.textAlign = 'center';
     th.setAttribute('bgcolor', '#E0E0E0'); // Excel compatibility
     th.dataset.columnName = header;
     
-    // Make Name column sticky (both left and top)
-    if (header === 'Name') {
-      th.classList.add('sticky-name-column');
+    if (header === 'Select') {
+      // Make Select column sticky (left: 0, top: 0)
+      th.classList.add('sticky-select-column');
       th.style.position = 'sticky';
       th.style.left = '0';
       th.style.top = '0';
-      th.style.zIndex = '25';
+      th.style.zIndex = '26'; // Higher than Name column
       th.style.backgroundColor = '#E0E0E0';
+      
+      // Add select all checkbox
+      const selectAllLabel = document.createElement('label');
+      selectAllLabel.style.cursor = 'pointer';
+      selectAllLabel.style.display = 'flex';
+      selectAllLabel.style.alignItems = 'center';
+      selectAllLabel.style.justifyContent = 'center';
+      selectAllLabel.style.gap = '5px';
+      
+      const selectAllCheckbox = document.createElement('input');
+      selectAllCheckbox.type = 'checkbox';
+      selectAllCheckbox.id = 'select-all-entry';
+      
+      // Check if all valid results are selected
+      const allSelected = validResults.length > 0 && validResults.every(r => selectedEntryAnimals.has(r.registrationNumber));
+      selectAllCheckbox.checked = allSelected;
+      
+      selectAllCheckbox.addEventListener('change', () => {
+        if (selectAllCheckbox.checked) {
+          // Select all animals
+          validResults.forEach(result => {
+            selectedEntryAnimals.add(result.registrationNumber);
+          });
+        } else {
+          // Deselect all animals
+          validResults.forEach(result => {
+            selectedEntryAnimals.delete(result.registrationNumber);
+          });
+        }
+        updateEntrySelectedCount();
+        // Update all checkboxes in the table
+        tbody.querySelectorAll('input[type="checkbox"][data-registration-number]').forEach(cb => {
+          cb.checked = selectedEntryAnimals.has(cb.dataset.registrationNumber);
+        });
+        // Reset last clicked checkbox after select-all
+        lastClickedEntryCheckbox = null;
+      });
+      
+      selectAllLabel.appendChild(selectAllCheckbox);
+      selectAllLabel.appendChild(document.createTextNode('All'));
+      th.appendChild(selectAllLabel);
+    } else {
+      th.textContent = header;
+      
+      // Make Name column sticky (offset by Select column width, top: 0)
+      if (header === 'Name') {
+        th.classList.add('sticky-name-column');
+        th.style.position = 'sticky';
+        th.style.left = '50px'; // Approximate width of Select column
+        th.style.top = '0';
+        th.style.zIndex = '25';
+        th.style.backgroundColor = '#E0E0E0';
+      }
+      
+      // Make all headers clickable for sorting (except Actions and Select)
+      if (header !== 'Actions' && header !== 'Select') {
+        th.style.cursor = 'pointer';
+        th.classList.add('sortable-header');
+        th.title = 'Click to sort';
+      } else {
+        th.style.cursor = 'default';
+      }
     }
-    
-    // Make all headers clickable for sorting
-    th.style.cursor = 'pointer';
-    th.classList.add('sortable-header');
-    th.title = 'Click to sort';
     
     headerRow.appendChild(th);
   });
@@ -821,24 +888,177 @@ async function displayResults(results) {
 
   // Create body
   const tbody = document.createElement('tbody');
+  // Shared flag to track if we're in a shift-click operation (shared across all checkboxes)
+  let isShiftClickingEntry = false;
+  // Set to track checkboxes being updated during shift-click
+  const shiftClickingCheckboxesEntry = new Set();
+  
   validResults.forEach((result, rowIndex) => {
     const row = document.createElement('tr');
     row.dataset.rowIndex = rowIndex;
     
-    // Name column (first) - sticky
+    // Select checkbox column - sticky
+    const selectCell = document.createElement('td');
+    selectCell.style.padding = '8px';
+    selectCell.style.border = '1px solid #000';
+    selectCell.style.textAlign = 'center';
+    selectCell.style.backgroundColor = rowIndex % 2 === 0 ? '#FFFFFF' : '#f9f9f9';
+    selectCell.style.color = '#000000';
+    selectCell.setAttribute('bgcolor', rowIndex % 2 === 0 ? '#FFFFFF' : '#f9f9f9');
+    selectCell.dataset.columnName = 'Select';
+    selectCell.classList.add('sticky-select-column');
+    selectCell.style.position = 'sticky';
+    selectCell.style.left = '0';
+    selectCell.style.zIndex = '11'; // Higher than Name column
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.registrationNumber = result.registrationNumber;
+    checkbox.dataset.rowIndex = rowIndex; // Store row index for range selection
+    checkbox.checked = selectedEntryAnimals.has(result.registrationNumber);
+    
+    checkbox.addEventListener('click', (e) => {
+      // Handle shift-click for range selection
+      if (e.shiftKey && lastClickedEntryCheckbox !== null && lastClickedEntryCheckbox !== checkbox) {
+        e.preventDefault(); // Prevent default checkbox toggle
+        e.stopImmediatePropagation(); // Stop all event propagation immediately
+        
+        // Set flag FIRST before any checkbox changes
+        isShiftClickingEntry = true;
+        
+        // Get all rows in the tbody (in DOM order, which reflects current sort)
+        const allRows = Array.from(tbody.querySelectorAll('tr'));
+        
+        // Find the DOM index of the last clicked checkbox's row
+        const lastRow = lastClickedEntryCheckbox.closest('tr');
+        const lastDomIndex = allRows.indexOf(lastRow);
+        
+        // Find the DOM index of the current checkbox's row
+        const currentRow = checkbox.closest('tr');
+        const currentDomIndex = allRows.indexOf(currentRow);
+        
+        // Determine range (inclusive of both start and end)
+        const startIndex = Math.min(lastDomIndex, currentDomIndex);
+        const endIndex = Math.max(lastDomIndex, currentDomIndex);
+        
+        // Get the state we want to set (based on the last clicked checkbox)
+        const targetState = lastClickedEntryCheckbox.checked;
+        
+        // Collect all checkboxes in range first and add to tracking set
+        const checkboxesToUpdate = [];
+        for (let i = startIndex; i <= endIndex; i++) {
+          if (allRows[i]) {
+            const rangeCheckbox = allRows[i].querySelector('input[type="checkbox"][data-registration-number]');
+            if (rangeCheckbox) {
+              checkboxesToUpdate.push(rangeCheckbox);
+              shiftClickingCheckboxesEntry.add(rangeCheckbox); // Track this checkbox
+            }
+          }
+        }
+        
+        // Make absolutely sure the current checkbox is included (check by registration number)
+        const currentRegNum = result.registrationNumber;
+        const currentCheckboxInArray = checkboxesToUpdate.some(cb => cb.dataset.registrationNumber === currentRegNum);
+        if (!currentCheckboxInArray) {
+          checkboxesToUpdate.push(checkbox);
+          shiftClickingCheckboxesEntry.add(checkbox);
+        }
+        
+        // Update all checkboxes in the range (inclusive) - set state and tracking
+        // Process current checkbox last to ensure it's definitely set
+        const otherCheckboxes = checkboxesToUpdate.filter(cb => cb.dataset.registrationNumber !== currentRegNum);
+        otherCheckboxes.forEach(rangeCheckbox => {
+          const regNum = rangeCheckbox.dataset.registrationNumber;
+          // Set checkbox state - this will trigger change event, but we'll ignore it
+          rangeCheckbox.checked = targetState;
+          // Update selection tracking
+          if (targetState) {
+            selectedEntryAnimals.add(regNum);
+          } else {
+            selectedEntryAnimals.delete(regNum);
+          }
+        });
+        
+        // Set current checkbox LAST and explicitly (force it)
+        checkbox.checked = targetState;
+        if (targetState) {
+          selectedEntryAnimals.add(currentRegNum);
+        } else {
+          selectedEntryAnimals.delete(currentRegNum);
+        }
+        
+        // Update last clicked checkbox AFTER processing range
+        lastClickedEntryCheckbox = checkbox;
+        
+        updateEntrySelectedCount();
+        // Update select-all checkbox state
+        const selectAllCheckbox = document.getElementById('select-all-entry');
+        if (selectAllCheckbox) {
+          const allSelected = validResults.length > 0 && validResults.every(r => selectedEntryAnimals.has(r.registrationNumber));
+          selectAllCheckbox.checked = allSelected;
+        }
+        
+        // Force set current checkbox state again after a brief delay to ensure it sticks
+        setTimeout(() => {
+          checkbox.checked = targetState;
+          if (targetState) {
+            selectedEntryAnimals.add(currentRegNum);
+          } else {
+            selectedEntryAnimals.delete(currentRegNum);
+          }
+        }, 10);
+        
+        // Clear tracking set and reset flag after all operations complete
+        // Use a longer delay to ensure all change events have been processed
+        setTimeout(() => {
+          shiftClickingCheckboxesEntry.clear();
+          isShiftClickingEntry = false;
+        }, 200);
+        
+        return false;
+      }
+    });
+    
+    checkbox.addEventListener('change', () => {
+      // Skip if this was part of a shift-click operation
+      if (isShiftClickingEntry || shiftClickingCheckboxesEntry.has(checkbox)) {
+        return;
+      }
+      
+      // Handle normal clicks - always update tracking
+      if (checkbox.checked) {
+        selectedEntryAnimals.add(result.registrationNumber);
+      } else {
+        selectedEntryAnimals.delete(result.registrationNumber);
+      }
+      
+      // Update last clicked checkbox
+      lastClickedEntryCheckbox = checkbox;
+      
+      updateEntrySelectedCount();
+      // Update select-all checkbox state
+      const selectAllCheckbox = document.getElementById('select-all-entry');
+      if (selectAllCheckbox) {
+        const allSelected = validResults.length > 0 && validResults.every(r => selectedEntryAnimals.has(r.registrationNumber));
+        selectAllCheckbox.checked = allSelected;
+      }
+    });
+    selectCell.appendChild(checkbox);
+    row.appendChild(selectCell);
+    
+    // Name column - sticky (offset by Select column)
     const nameCell = document.createElement('td');
     nameCell.textContent = result.data.animalName || '';
     nameCell.style.padding = '8px';
     nameCell.style.border = '1px solid #000';
     nameCell.style.textAlign = 'center';
-    nameCell.style.backgroundColor = '#FFFFFF';
+    nameCell.style.backgroundColor = rowIndex % 2 === 0 ? '#FFFFFF' : '#f9f9f9';
     nameCell.style.color = '#000000';
     nameCell.classList.add('sticky-name-column');
     nameCell.style.position = 'sticky';
-    nameCell.style.left = '0';
+    nameCell.style.left = '50px'; // Offset by Select column width
     nameCell.style.zIndex = '10';
-    nameCell.style.backgroundColor = rowIndex % 2 === 0 ? '#FFFFFF' : '#f9f9f9';
-    nameCell.setAttribute('bgcolor', '#FFFFFF');
+    nameCell.setAttribute('bgcolor', rowIndex % 2 === 0 ? '#FFFFFF' : '#f9f9f9');
     nameCell.dataset.columnName = 'Name';
     row.appendChild(nameCell);
     
@@ -984,6 +1204,181 @@ async function displayResults(results) {
       row.appendChild(cell);
     });
 
+    // Actions column with Change Category button
+    const actionsCell = document.createElement('td');
+    actionsCell.style.padding = '8px';
+    actionsCell.style.border = '1px solid #000';
+    actionsCell.style.textAlign = 'center';
+    actionsCell.style.backgroundColor = '#FFFFFF';
+    actionsCell.style.color = '#000000';
+    actionsCell.setAttribute('bgcolor', '#FFFFFF');
+    actionsCell.dataset.columnName = 'Actions';
+    
+    const changeCategoryBtn = document.createElement('button');
+    changeCategoryBtn.textContent = 'Change Category';
+    changeCategoryBtn.className = 'btn btn-secondary';
+    changeCategoryBtn.style.padding = '4px 8px';
+    changeCategoryBtn.style.fontSize = '0.9em';
+    changeCategoryBtn.addEventListener('click', async () => {
+      // Get current categories from the cached animal data
+      const registrationNumber = result.registrationNumber;
+      let currentCategories = ['My Herd'];
+      
+      // Try to get current categories from cache
+      try {
+        const cachedAnimals = await window.electronAPI.getCachedAnimals();
+        const cachedAnimal = cachedAnimals.find(a => a.registrationNumber === registrationNumber);
+        if (cachedAnimal) {
+          currentCategories = cachedAnimal.categories || (cachedAnimal.category ? [cachedAnimal.category] : ['My Herd']);
+        }
+      } catch (error) {
+        console.error('Error fetching cached animal data:', error);
+      }
+      
+      // Create checkbox container for multi-select
+      const checkboxContainer = document.createElement('div');
+      checkboxContainer.style.maxHeight = '300px';
+      checkboxContainer.style.overflowY = 'auto';
+      checkboxContainer.style.border = '1px solid #ddd';
+      checkboxContainer.style.borderRadius = '4px';
+      checkboxContainer.style.padding = '10px';
+      checkboxContainer.style.marginBottom = '15px';
+      
+      const checkboxes = [];
+      availableCategories.forEach(cat => {
+        const label = document.createElement('label');
+        label.style.display = 'block';
+        label.style.padding = '5px';
+        label.style.cursor = 'pointer';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = cat;
+        checkbox.checked = currentCategories.includes(cat);
+        checkbox.style.marginRight = '8px';
+        
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(cat));
+        checkboxContainer.appendChild(label);
+        checkboxes.push(checkbox);
+      });
+      
+      // Mode selector (replace, add, remove)
+      const modeContainer = document.createElement('div');
+      modeContainer.style.marginBottom = '15px';
+      modeContainer.innerHTML = `
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Operation Mode:</label>
+        <select id="category-mode-select" style="width: 100%; padding: 8px;">
+          <option value="replace">Replace all categories</option>
+          <option value="add">Add to existing categories</option>
+          <option value="remove">Remove selected categories</option>
+        </select>
+      `;
+      
+      // Create modal-like dialog
+      const dialog = document.createElement('div');
+      dialog.style.position = 'fixed';
+      dialog.style.top = '0';
+      dialog.style.left = '0';
+      dialog.style.width = '100%';
+      dialog.style.height = '100%';
+      dialog.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+      dialog.style.display = 'flex';
+      dialog.style.justifyContent = 'center';
+      dialog.style.alignItems = 'center';
+      dialog.style.zIndex = '10000';
+      
+      const dialogContent = document.createElement('div');
+      dialogContent.style.backgroundColor = 'white';
+      dialogContent.style.padding = '20px';
+      dialogContent.style.borderRadius = '8px';
+      dialogContent.style.minWidth = '350px';
+      dialogContent.style.maxWidth = '500px';
+      dialogContent.style.maxHeight = '80vh';
+      dialogContent.style.overflowY = 'auto';
+      dialogContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+      
+      const animalName = result.data.animalName || registrationNumber;
+      dialogContent.innerHTML = `
+        <h3 style="margin-top: 0;">Change Categories</h3>
+        <p style="margin-bottom: 10px;">Animal: ${animalName}</p>
+        <p style="margin-bottom: 10px; font-size: 0.9em; color: #666;">Current categories: ${currentCategories.join(', ')}</p>
+      `;
+      
+      dialogContent.appendChild(modeContainer);
+      dialogContent.appendChild(checkboxContainer);
+      
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.display = 'flex';
+      buttonContainer.style.justifyContent = 'flex-end';
+      buttonContainer.style.gap = '10px';
+      buttonContainer.style.marginTop = '15px';
+      
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.className = 'btn btn-secondary';
+      cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(dialog);
+      });
+      
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = 'Save';
+      saveBtn.className = 'btn btn-primary';
+      saveBtn.addEventListener('click', async () => {
+        const selectedCategories = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
+        const mode = document.getElementById('category-mode-select').value;
+        
+        if (selectedCategories.length === 0 && mode !== 'remove') {
+          alert('Please select at least one category');
+          return;
+        }
+        
+        try {
+          const updateResult = await window.electronAPI.updateAnimalCategories(registrationNumber, selectedCategories, mode);
+          if (updateResult.success) {
+            // Refresh cached animals dropdowns
+            loadCachedAnimals();
+            // Refresh inventory if it's loaded (to update counts)
+            if (allInventoryAnimals.length > 0) {
+              await loadInventory();
+            }
+            document.body.removeChild(dialog);
+            // Show success message
+            alert(`Categories updated successfully for ${animalName}`);
+          } else {
+            alert('Error updating categories: ' + (updateResult.error || 'Unknown error'));
+          }
+        } catch (error) {
+          alert('Error updating categories: ' + error.message);
+        }
+      });
+      
+      buttonContainer.appendChild(cancelBtn);
+      buttonContainer.appendChild(saveBtn);
+      dialogContent.appendChild(buttonContainer);
+      dialog.appendChild(dialogContent);
+      document.body.appendChild(dialog);
+      
+      // Close on click outside
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) {
+          document.body.removeChild(dialog);
+        }
+      });
+      
+      // Close on Escape key
+      const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+          document.body.removeChild(dialog);
+          document.removeEventListener('keydown', escapeHandler);
+        }
+      };
+      document.addEventListener('keydown', escapeHandler);
+    });
+    
+    actionsCell.appendChild(changeCategoryBtn);
+    row.appendChild(actionsCell);
+
     tbody.appendChild(row);
   });
   table.appendChild(tbody);
@@ -1018,6 +1413,17 @@ async function displayResults(results) {
   tableControls.style.gap = '15px';
   tableControls.style.flexWrap = 'wrap';
   tableControls.style.alignItems = 'center';
+  
+  // Add bulk change category button
+  const bulkChangeCategoryBtn = document.createElement('button');
+  bulkChangeCategoryBtn.textContent = `Change Category (${selectedEntryAnimals.size})`;
+  bulkChangeCategoryBtn.className = 'btn btn-secondary';
+  bulkChangeCategoryBtn.id = 'bulk-change-category-entry-btn';
+  bulkChangeCategoryBtn.disabled = selectedEntryAnimals.size === 0;
+  bulkChangeCategoryBtn.addEventListener('click', () => {
+    bulkChangeCategoryForEntry();
+  });
+  tableControls.appendChild(bulkChangeCategoryBtn);
 
   // Column visibility dropdown
   const columnVisibilityContainer = document.createElement('div');
@@ -1134,8 +1540,29 @@ async function displayResults(results) {
   // Create wrapper for table with controls
   const tableWrapper = document.createElement('div');
   tableWrapper.className = 'table-wrapper';
-  tableWrapper.appendChild(tableControls);
-  tableWrapper.appendChild(table);
+  tableWrapper.style.position = 'relative';
+  
+  // Create scrollable container that includes both controls and table
+  const scrollContainer = document.createElement('div');
+  scrollContainer.style.overflowX = 'auto';
+  scrollContainer.style.width = '100%';
+  scrollContainer.style.position = 'relative';
+  
+  // Make table controls sticky when scrolling horizontally
+  tableControls.style.position = 'sticky';
+  tableControls.style.left = '0';
+  tableControls.style.top = '0';
+  tableControls.style.zIndex = '20';
+  tableControls.style.backgroundColor = '#fff';
+  tableControls.style.paddingTop = '10px';
+  tableControls.style.paddingBottom = '10px';
+  tableControls.style.marginBottom = '0';
+  tableControls.style.width = 'max-content';
+  tableControls.style.minWidth = '100%';
+  
+  scrollContainer.appendChild(tableControls);
+  scrollContainer.appendChild(table);
+  tableWrapper.appendChild(scrollContainer);
 
   mainResultsContainer.appendChild(tableWrapper);
   
@@ -1227,17 +1654,28 @@ async function displayResults(results) {
     });
     
     rows.forEach((row, index) => {
+      // Update sticky select column background for zebra striping
+      const selectCell = row.querySelector('.sticky-select-column');
+      if (selectCell) {
+        selectCell.style.backgroundColor = index % 2 === 0 ? '#FFFFFF' : '#f9f9f9';
+        selectCell.setAttribute('bgcolor', index % 2 === 0 ? '#FFFFFF' : '#f9f9f9');
+      }
       // Update sticky name column background for zebra striping
       const nameCell = row.querySelector('.sticky-name-column');
       if (nameCell) {
         nameCell.style.backgroundColor = index % 2 === 0 ? '#FFFFFF' : '#f9f9f9';
+        nameCell.setAttribute('bgcolor', index % 2 === 0 ? '#FFFFFF' : '#f9f9f9');
       }
       tbody.appendChild(row);
     });
     
-    // Update sort indicators (preserve original column name)
+    // Update sort indicators (preserve original column name and select-all checkbox)
     table.querySelectorAll('th').forEach(th => {
       const originalName = th.dataset.columnName;
+      if (originalName === 'Select') {
+        // Don't modify Select column header (it has the checkbox)
+        return;
+      }
       if (originalName === columnName) {
         th.textContent = originalName + (direction === 'asc' ? ' ↑' : ' ↓');
       } else {
@@ -1290,9 +1728,195 @@ async function displayResults(results) {
     setTimeout(() => {
       hideProgress();
     }, 300);
-  } else {
-    hideProgress();
   }
+  
+  // Update bulk change category button state
+  updateEntrySelectedCount();
+}
+
+// Update selected count for Animal Entry page
+function updateEntrySelectedCount() {
+  const bulkBtn = document.getElementById('bulk-change-category-entry-btn');
+  if (bulkBtn) {
+    bulkBtn.disabled = selectedEntryAnimals.size === 0;
+    bulkBtn.textContent = `Change Category (${selectedEntryAnimals.size})`;
+  }
+}
+
+// Bulk change category for selected animals in Animal Entry page
+async function bulkChangeCategoryForEntry() {
+  if (selectedEntryAnimals.size === 0) {
+    alert('Please select at least one animal to change category.');
+    return;
+  }
+  
+  if (availableCategories.length === 0) {
+    alert('No categories available.');
+    return;
+  }
+  
+  // Create checkbox container for multi-select
+  const checkboxContainer = document.createElement('div');
+  checkboxContainer.style.maxHeight = '300px';
+  checkboxContainer.style.overflowY = 'auto';
+  checkboxContainer.style.border = '1px solid #ddd';
+  checkboxContainer.style.borderRadius = '4px';
+  checkboxContainer.style.padding = '10px';
+  checkboxContainer.style.marginBottom = '15px';
+  
+  const checkboxes = [];
+  availableCategories.forEach(cat => {
+    const label = document.createElement('label');
+    label.style.display = 'block';
+    label.style.padding = '5px';
+    label.style.cursor = 'pointer';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = cat;
+    checkbox.style.marginRight = '8px';
+    
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(cat));
+    checkboxContainer.appendChild(label);
+    checkboxes.push(checkbox);
+  });
+  
+  // Mode selector (replace, add, remove)
+  const modeContainer = document.createElement('div');
+  modeContainer.style.marginBottom = '15px';
+  modeContainer.innerHTML = `
+    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Operation Mode:</label>
+    <select id="bulk-category-mode-select-entry" style="width: 100%; padding: 8px;">
+      <option value="replace">Replace all categories</option>
+      <option value="add">Add to existing categories</option>
+      <option value="remove">Remove selected categories</option>
+    </select>
+  `;
+  
+  // Create modal-like dialog
+  const dialog = document.createElement('div');
+  dialog.style.position = 'fixed';
+  dialog.style.top = '0';
+  dialog.style.left = '0';
+  dialog.style.width = '100%';
+  dialog.style.height = '100%';
+  dialog.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  dialog.style.display = 'flex';
+  dialog.style.justifyContent = 'center';
+  dialog.style.alignItems = 'center';
+  dialog.style.zIndex = '10000';
+  
+  const dialogContent = document.createElement('div');
+  dialogContent.style.backgroundColor = 'white';
+  dialogContent.style.padding = '20px';
+  dialogContent.style.borderRadius = '8px';
+  dialogContent.style.minWidth = '350px';
+  dialogContent.style.maxWidth = '500px';
+  dialogContent.style.maxHeight = '80vh';
+  dialogContent.style.overflowY = 'auto';
+  dialogContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+  
+  dialogContent.innerHTML = `
+    <h3 style="margin-top: 0;">Bulk Change Categories</h3>
+    <p style="margin-bottom: 10px;">Change categories for <strong>${selectedEntryAnimals.size}</strong> selected animal(s):</p>
+  `;
+  
+  dialogContent.appendChild(modeContainer);
+  dialogContent.appendChild(checkboxContainer);
+  
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.display = 'flex';
+  buttonContainer.style.justifyContent = 'flex-end';
+  buttonContainer.style.gap = '10px';
+  buttonContainer.style.marginTop = '15px';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.addEventListener('click', () => {
+    document.body.removeChild(dialog);
+  });
+  
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Change Categories';
+  saveBtn.className = 'btn btn-primary';
+  saveBtn.addEventListener('click', async () => {
+    const selectedCategories = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
+    const mode = document.getElementById('bulk-category-mode-select-entry').value;
+    
+    if (selectedCategories.length === 0 && mode !== 'remove') {
+      alert('Please select at least one category');
+      return;
+    }
+    
+    const registrationNumbers = Array.from(selectedEntryAnimals);
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+    
+    // Disable button during operation
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Updating...';
+    
+    // Update each animal's categories
+    for (const regNum of registrationNumbers) {
+      try {
+        const result = await window.electronAPI.updateAnimalCategories(regNum, selectedCategories, mode);
+        if (result.success) {
+          successCount++;
+        } else {
+          errorCount++;
+          errors.push(`${regNum}: ${result.error || 'Unknown error'}`);
+        }
+      } catch (error) {
+        errorCount++;
+        errors.push(`${regNum}: ${error.message}`);
+      }
+    }
+    
+    // Close dialog
+    document.body.removeChild(dialog);
+    
+    // Show results
+    const modeText = mode === 'replace' ? 'replaced with' : mode === 'add' ? 'added' : 'removed';
+    if (errorCount === 0) {
+      alert(`Successfully ${modeText} categories for ${successCount} animal(s).`);
+    } else {
+      alert(`Updated ${successCount} animal(s). ${errorCount} error(s):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`);
+    }
+    
+    // Clear selection and refresh cached animals dropdowns
+    selectedEntryAnimals.clear();
+    updateEntrySelectedCount();
+    loadCachedAnimals();
+    // Refresh inventory if it's loaded (to update counts)
+    if (allInventoryAnimals.length > 0) {
+      await loadInventory();
+    }
+  });
+  
+  buttonContainer.appendChild(cancelBtn);
+  buttonContainer.appendChild(saveBtn);
+  dialogContent.appendChild(buttonContainer);
+  dialog.appendChild(dialogContent);
+  document.body.appendChild(dialog);
+  
+  // Close on click outside
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) {
+      document.body.removeChild(dialog);
+    }
+  });
+  
+  // Close on Escape key
+  const escapeHandler = (e) => {
+    if (e.key === 'Escape') {
+      document.body.removeChild(dialog);
+      document.removeEventListener('keydown', escapeHandler);
+    }
+  };
+  document.addEventListener('keydown', escapeHandler);
 }
 
 async function displayMatingResults(data, fromAllMatings = false) {
@@ -2206,6 +2830,7 @@ const deleteCategoryBtn = document.getElementById('delete-category-btn');
 
 let allInventoryAnimals = [];
 let selectedAnimals = new Set(); // Store registration numbers of selected animals
+let lastClickedInventoryCheckbox = null; // Track last clicked checkbox for shift-click range selection
 let availableCategories = []; // Store available categories
 
 // Load categories from config
@@ -2305,6 +2930,7 @@ loadCategoriesFromConfig();
 async function loadInventory() {
   try {
     allInventoryAnimals = await window.electronAPI.getCachedAnimals();
+    lastClickedInventoryCheckbox = null; // Reset last clicked checkbox
     displayInventory();
   } catch (error) {
     console.error('Error loading inventory:', error);
@@ -2415,12 +3041,30 @@ function displayInventory() {
           });
         }
         updateSelectedCount();
+        // Reset last clicked checkbox after select-all
+        lastClickedInventoryCheckbox = null;
         displayInventory(); // Refresh to update checkbox states
       });
       
       selectAllLabel.appendChild(selectAllCheckbox);
       selectAllLabel.appendChild(document.createTextNode('All'));
       th.appendChild(selectAllLabel);
+      
+      // Add "Select None" button next to select all
+      const selectNoneBtn = document.createElement('button');
+      selectNoneBtn.textContent = 'None';
+      selectNoneBtn.className = 'btn btn-secondary';
+      selectNoneBtn.style.padding = '4px 8px';
+      selectNoneBtn.style.fontSize = '0.85em';
+      selectNoneBtn.style.marginLeft = '10px';
+      selectNoneBtn.addEventListener('click', () => {
+        // Clear all selections
+        selectedAnimals.clear();
+        lastClickedInventoryCheckbox = null;
+        updateSelectedCount();
+        displayInventory(); // Refresh to update checkbox states
+      });
+      th.appendChild(selectNoneBtn);
     } else {
       th.textContent = headerText;
     }
@@ -2435,8 +3079,12 @@ function displayInventory() {
   
   // Body
   const tbody = document.createElement('tbody');
+  // Shared flag to track if we're in a shift-click operation (shared across all checkboxes)
+  let isShiftClickingInventory = false;
+  // Set to track checkboxes being updated during shift-click
+  const shiftClickingCheckboxesInventory = new Set();
   
-  filtered.forEach(animal => {
+  filtered.forEach((animal, index) => {
     const row = document.createElement('tr');
     
     // Checkbox for selection
@@ -2447,13 +3095,121 @@ function displayInventory() {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.dataset.registrationNumber = animal.registrationNumber;
+    checkbox.dataset.rowIndex = index; // Store row index for range selection
     checkbox.checked = selectedAnimals.has(animal.registrationNumber);
+    
+    checkbox.addEventListener('click', (e) => {
+      // Handle shift-click for range selection
+      if (e.shiftKey && lastClickedInventoryCheckbox !== null && lastClickedInventoryCheckbox !== checkbox) {
+        e.preventDefault(); // Prevent default checkbox toggle
+        e.stopImmediatePropagation(); // Stop all event propagation immediately
+        
+        // Set flag FIRST before any checkbox changes
+        isShiftClickingInventory = true;
+        
+        // Get all rows in the tbody (in DOM order, which reflects current sort/filter)
+        const allRows = Array.from(tbody.querySelectorAll('tr'));
+        
+        // Find the DOM index of the last clicked checkbox's row
+        const lastRow = lastClickedInventoryCheckbox.closest('tr');
+        const lastDomIndex = allRows.indexOf(lastRow);
+        
+        // Find the DOM index of the current checkbox's row
+        const currentRow = checkbox.closest('tr');
+        const currentDomIndex = allRows.indexOf(currentRow);
+        
+        // Determine range (inclusive of both start and end)
+        const startIndex = Math.min(lastDomIndex, currentDomIndex);
+        const endIndex = Math.max(lastDomIndex, currentDomIndex);
+        
+        // Get the state we want to set (based on the last clicked checkbox)
+        const targetState = lastClickedInventoryCheckbox.checked;
+        
+        // Collect all checkboxes in range first and add to tracking set
+        const checkboxesToUpdate = [];
+        for (let i = startIndex; i <= endIndex; i++) {
+          if (allRows[i]) {
+            const rangeCheckbox = allRows[i].querySelector('input[type="checkbox"][data-registration-number]');
+            if (rangeCheckbox) {
+              checkboxesToUpdate.push(rangeCheckbox);
+              shiftClickingCheckboxesInventory.add(rangeCheckbox); // Track this checkbox
+            }
+          }
+        }
+        
+        // Make absolutely sure the current checkbox is included (check by registration number)
+        const currentRegNum = animal.registrationNumber;
+        const currentCheckboxInArray = checkboxesToUpdate.some(cb => cb.dataset.registrationNumber === currentRegNum);
+        if (!currentCheckboxInArray) {
+          checkboxesToUpdate.push(checkbox);
+          shiftClickingCheckboxesInventory.add(checkbox);
+        }
+        
+        // Update all checkboxes in the range (inclusive) - set state and tracking
+        // Process current checkbox last to ensure it's definitely set
+        const otherCheckboxes = checkboxesToUpdate.filter(cb => cb.dataset.registrationNumber !== currentRegNum);
+        otherCheckboxes.forEach(rangeCheckbox => {
+          const regNum = rangeCheckbox.dataset.registrationNumber;
+          // Set checkbox state - this will trigger change event, but we'll ignore it
+          rangeCheckbox.checked = targetState;
+          // Update selection tracking
+          if (targetState) {
+            selectedAnimals.add(regNum);
+          } else {
+            selectedAnimals.delete(regNum);
+          }
+        });
+        
+        // Set current checkbox LAST and explicitly (force it)
+        checkbox.checked = targetState;
+        if (targetState) {
+          selectedAnimals.add(currentRegNum);
+        } else {
+          selectedAnimals.delete(currentRegNum);
+        }
+        
+        // Update last clicked checkbox AFTER processing range
+        lastClickedInventoryCheckbox = checkbox;
+        
+        updateSelectedCount();
+        
+        // Force set current checkbox state again after a brief delay to ensure it sticks
+        setTimeout(() => {
+          checkbox.checked = targetState;
+          if (targetState) {
+            selectedAnimals.add(currentRegNum);
+          } else {
+            selectedAnimals.delete(currentRegNum);
+          }
+        }, 10);
+        
+        // Clear tracking set and reset flag after all operations complete
+        // Use a longer delay to ensure all change events have been processed
+        setTimeout(() => {
+          shiftClickingCheckboxesInventory.clear();
+          isShiftClickingInventory = false;
+        }, 200);
+        
+        return false;
+      }
+    });
+    
     checkbox.addEventListener('change', () => {
+      // Skip if this was part of a shift-click operation
+      if (isShiftClickingInventory || shiftClickingCheckboxesInventory.has(checkbox)) {
+        return;
+      }
+      
+      // Handle normal clicks - always update tracking
       if (checkbox.checked) {
         selectedAnimals.add(animal.registrationNumber);
       } else {
         selectedAnimals.delete(animal.registrationNumber);
       }
+      
+      // Update last clicked checkbox
+      lastClickedInventoryCheckbox = checkbox;
+      
       updateSelectedCount();
     });
     selectCell.appendChild(checkbox);
@@ -2947,7 +3703,11 @@ async function bulkChangeCategory() {
 
 // Event listeners
 if (refreshInventoryBtn) {
-  refreshInventoryBtn.addEventListener('click', loadInventory);
+  refreshInventoryBtn.addEventListener('click', async () => {
+    // Refresh both inventory and categories
+    await loadCategoriesFromConfig();
+    await loadInventory();
+  });
 }
 
 if (inventoryFilter) {
@@ -3042,6 +3802,37 @@ if (restoreBackupConfirmBtn) {
   restoreBackupConfirmBtn.addEventListener('click', restoreBackup);
 }
 
+// Refresh auto-backups button
+const refreshAutoBackupsBtn = document.getElementById('refresh-auto-backups-btn');
+if (refreshAutoBackupsBtn) {
+  refreshAutoBackupsBtn.addEventListener('click', async () => {
+    // Refresh both auto-backups list and categories
+    await loadAutoBackups();
+    await loadCategoriesFromConfig();
+  });
+}
+
+// Select backup file button (for manual file selection)
+const selectBackupFileBtn = document.getElementById('select-backup-file-btn');
+if (selectBackupFileBtn) {
+  selectBackupFileBtn.addEventListener('click', () => {
+    // Clear auto-backup selection
+    selectedBackupPath = null;
+    const listContainer = document.getElementById('auto-backups-list');
+    if (listContainer) {
+      listContainer.querySelectorAll('.backup-item').forEach(item => {
+        item.style.borderColor = '#ddd';
+        item.style.backgroundColor = 'white';
+      });
+    }
+    
+    // Indicate that file selection will happen when restore is clicked
+    document.getElementById('selected-backup-details').innerHTML = 'File picker will open when you click Restore';
+    document.getElementById('selected-backup-info').style.display = 'block';
+    document.getElementById('restore-backup-confirm-btn').disabled = false;
+  });
+}
+
 // Create backup of all cached animals and categories
 async function createBackup() {
   try {
@@ -3063,8 +3854,11 @@ async function createBackup() {
   }
 }
 
+// Track selected backup
+let selectedBackupPath = null;
+
 // Show restore backup dialog
-function showRestoreBackupDialog() {
+async function showRestoreBackupDialog() {
   const dialog = document.getElementById('restore-backup-dialog');
   if (!dialog) return;
   
@@ -3072,7 +3866,106 @@ function showRestoreBackupDialog() {
   document.getElementById('restore-overwrite-existing').checked = false;
   document.getElementById('restore-categories').checked = true;
   
+  // Reset selected backup
+  selectedBackupPath = null;
+  document.getElementById('selected-backup-info').style.display = 'none';
+  document.getElementById('restore-backup-confirm-btn').disabled = true;
+  
+  // Load auto-backups
+  await loadAutoBackups();
+  
   dialog.style.display = 'block';
+}
+
+// Load and display auto-backups
+async function loadAutoBackups() {
+  const listContainer = document.getElementById('auto-backups-list');
+  if (!listContainer) return;
+  
+  listContainer.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">Loading backups...</div>';
+  
+  try {
+    const result = await window.electronAPI.listAutoBackups();
+    
+    if (!result.success) {
+      listContainer.innerHTML = `<div style="text-align: center; color: #d32f2f; padding: 20px;">Error loading backups: ${result.error || 'Unknown error'}</div>`;
+      return;
+    }
+    
+    const backups = result.backups || [];
+    
+    if (backups.length === 0) {
+      listContainer.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">No auto-backups found. Backups are created automatically when you close the app.</div>';
+      return;
+    }
+    
+    // Create list of backups
+    let html = '';
+    backups.forEach((backup, index) => {
+      const date = new Date(backup.createdAt);
+      const dateStr = date.toLocaleString();
+      const sizeKB = (backup.size / 1024).toFixed(1);
+      
+      html += `
+        <div class="backup-item" data-backup-path="${backup.path}" style="
+          padding: 10px;
+          margin-bottom: 8px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          background-color: white;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        " onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='white'">
+          <div style="font-weight: bold; margin-bottom: 5px;">${dateStr}</div>
+          <div style="font-size: 0.85em; color: #666;">
+            ${backup.animalCount} animals • ${backup.categoryCount} categories • ${sizeKB} KB
+          </div>
+        </div>
+      `;
+    });
+    
+    listContainer.innerHTML = html;
+    
+    // Add click handlers
+    listContainer.querySelectorAll('.backup-item').forEach(item => {
+      item.addEventListener('click', () => {
+        // Remove previous selection
+        listContainer.querySelectorAll('.backup-item').forEach(i => {
+          i.style.borderColor = '#ddd';
+          i.style.backgroundColor = 'white';
+        });
+        
+        // Highlight selected
+        item.style.borderColor = '#4CAF50';
+        item.style.backgroundColor = '#e8f5e9';
+        
+        // Store selected backup
+        selectedBackupPath = item.getAttribute('data-backup-path');
+        
+        // Show backup details
+        const backup = backups.find(b => b.path === selectedBackupPath);
+        if (backup) {
+          const date = new Date(backup.createdAt);
+          const dateStr = date.toLocaleString();
+          const sizeKB = (backup.size / 1024).toFixed(1);
+          
+          document.getElementById('selected-backup-details').innerHTML = `
+            <strong>Date:</strong> ${dateStr}<br>
+            <strong>Animals:</strong> ${backup.animalCount}<br>
+            <strong>Categories:</strong> ${backup.categoryCount}<br>
+            <strong>Size:</strong> ${sizeKB} KB
+          `;
+          document.getElementById('selected-backup-info').style.display = 'block';
+        }
+        
+        // Enable restore button
+        document.getElementById('restore-backup-confirm-btn').disabled = false;
+      });
+    });
+  } catch (error) {
+    console.error('Error loading auto-backups:', error);
+    listContainer.innerHTML = `<div style="text-align: center; color: #d32f2f; padding: 20px;">Error loading backups: ${error.message || 'Unknown error'}</div>`;
+  }
 }
 
 // Restore from backup
@@ -3084,10 +3977,21 @@ async function restoreBackup() {
   document.getElementById('restore-backup-dialog').style.display = 'none';
   
   try {
-    const result = await window.electronAPI.restoreBackup({
-      overwriteExisting,
-      restoreCategories
-    });
+    let result;
+    
+    // If an auto-backup is selected, use restoreAutoBackup
+    if (selectedBackupPath) {
+      result = await window.electronAPI.restoreAutoBackup(selectedBackupPath, {
+        overwriteExisting,
+        restoreCategories
+      });
+    } else {
+      // Otherwise, use the file picker (original behavior)
+      result = await window.electronAPI.restoreBackup({
+        overwriteExisting,
+        restoreCategories
+      });
+    }
     
     if (result.canceled) {
       return; // User canceled
@@ -3098,12 +4002,17 @@ async function restoreBackup() {
       return;
     }
     
-    const message = `Backup restored successfully!\n\n` +
+    let message = `Backup restored successfully!\n\n` +
       `Animals restored: ${result.restoredCount}\n` +
       `Animals skipped: ${result.skippedCount}\n` +
       `Errors: ${result.errorCount}\n` +
-      `Total in backup: ${result.totalInBackup}\n\n` +
-      `Please refresh your herd inventory to see the restored animals.`;
+      `Total in backup: ${result.totalInBackup}`;
+    
+    if (result.deletedCount && result.deletedCount > 0) {
+      message += `\nAnimals removed (snapshot restore): ${result.deletedCount}`;
+    }
+    
+    message += `\n\nPlease refresh your herd inventory to see the restored animals.`;
     
     alert(message);
     
@@ -3762,6 +4671,15 @@ async function showCategoryManagementModal() {
   // Load current categories
   await loadCategoriesFromConfig();
   
+  // Ensure inventory is loaded (in case modal is opened from a different tab)
+  if (allInventoryAnimals.length === 0) {
+    try {
+      allInventoryAnimals = await window.electronAPI.getCachedAnimals();
+    } catch (error) {
+      console.error('Error loading inventory for category management:', error);
+    }
+  }
+  
   // Get all animals to count per category
   // Support both new array format (categories) and old single format (category)
   const categoryCounts = {};
@@ -3848,9 +4766,15 @@ if (addCategoryBtn) {
   });
 }
 
-// Manage categories button
+// Manage categories button (from Herd Inventory page)
 if (manageCategoriesBtn) {
   manageCategoriesBtn.addEventListener('click', showCategoryManagementModal);
+}
+
+// Global Manage Categories button (available on all pages)
+const manageCategoriesGlobalBtn = document.getElementById('manage-categories-global-btn');
+if (manageCategoriesGlobalBtn) {
+  manageCategoriesGlobalBtn.addEventListener('click', showCategoryManagementModal);
 }
 
 // Load inventory on page load
@@ -4282,8 +5206,14 @@ let externalImportState = {
     registrationNumber: null,
     animalName: null,
     sex: null,
+    sire: null,
+    dam: null,
+    mgs: null,
+    birthDate: null,
+    tattoo: null,
     epdTraits: {},
-    percentRanks: {}
+    percentRanks: {},
+    customEpdFields: [] // Array of { fieldName: string, columnIndex: number }
   },
   autoDetectedMappings: null
 };
@@ -4304,8 +5234,14 @@ async function importExternalData() {
       registrationNumber: null,
       animalName: null,
       sex: null,
+      sire: null,
+      dam: null,
+      mgs: null,
+      birthDate: null,
+      tattoo: null,
       epdTraits: {},
-      percentRanks: {}
+      percentRanks: {},
+      customEpdFields: []
     },
     autoDetectedMappings: null
   };
@@ -4433,6 +5369,9 @@ function showColumnMappingDialog() {
 
   let html = '<div style="display: grid; gap: 10px;">';
 
+  // Basic Information Section
+  html += '<div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 2px solid #ddd;"><strong style="font-size: 1.1em;">Basic Information:</strong></div>';
+  
   // Registration Number (required)
   html += createMappingRow('Registration Number *', 'registrationNumber', headers, mappings.registrationNumber);
 
@@ -4442,8 +5381,36 @@ function showColumnMappingDialog() {
   // Sex
   html += createMappingRow('Sex', 'sex', headers, mappings.sex);
 
-  // EPD Traits
-  html += '<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;"><strong>EPD Traits:</strong></div>';
+  // Pedigree Information Section
+  html += '<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 2px solid #ddd;"><strong style="font-size: 1.1em;">Pedigree Information:</strong></div>';
+  
+  html += createMappingRow('Sire', 'sire', headers, mappings.sire);
+  html += createMappingRow('Dam', 'dam', headers, mappings.dam);
+  html += createMappingRow('Maternal Grand Sire (MGS)', 'mgs', headers, mappings.mgs);
+  html += createMappingRow('Birth Date', 'birthDate', headers, mappings.birthDate);
+  html += createMappingRow('Tattoo', 'tattoo', headers, mappings.tattoo);
+
+  // Custom EPD Fields Section
+  html += '<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 2px solid #ddd;"><strong style="font-size: 1.1em;">Additional EPD Fields:</strong></div>';
+  html += '<p style="margin-bottom: 10px; color: #666; font-size: 0.9em;">Add custom EPD field names and map them to spreadsheet columns:</p>';
+  
+  // Display existing custom EPD fields
+  const customFields = mappings.customEpdFields || [];
+  if (customFields.length === 0) {
+    html += '<div id="custom-epd-fields-list" style="margin-bottom: 10px;"></div>';
+  } else {
+    html += '<div id="custom-epd-fields-list" style="margin-bottom: 10px;">';
+    customFields.forEach((field, index) => {
+      html += createCustomEpdFieldRow(field.fieldName, field.columnIndex, headers, index);
+    });
+    html += '</div>';
+  }
+  
+  // Add button to add new custom EPD field
+  html += '<button id="add-custom-epd-field-btn" class="btn btn-secondary" style="margin-bottom: 10px;">+ Add Custom EPD Field</button>';
+
+  // EPD Traits Section
+  html += '<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 2px solid #ddd;"><strong style="font-size: 1.1em;">EPD Traits:</strong></div>';
   const epdTraits = ['BW', 'WW', 'YW', 'CED', 'RADG', 'DMI', 'YH', 'SC', 'DOC', 'CLAW', 'ANGLE', 'PAP', 'HS', 'HP', 'CEM', 'MILK', 'TEAT', 'UDDR', 'FL', 'MW', 'MH', '$EN', 'CW', 'MARB', 'RE', 'FAT', '$M', '$B', '$C'];
   epdTraits.forEach(trait => {
     html += createMappingRow(`EPD: ${trait}`, `epd_${trait}`, headers, mappings.epdTraits[trait] || null);
@@ -4455,10 +5422,10 @@ function showColumnMappingDialog() {
 }
 
 // Create a mapping row
-function createMappingRow(label, fieldKey, headers, currentValue) {
-  let html = `<div style="display: grid; grid-template-columns: 200px 1fr; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid #eee;">`;
+function createMappingRow(label, fieldKey, headers, currentValue, headerName = null) {
+  let html = `<div style="display: grid; grid-template-columns: 250px 1fr; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid #eee;">`;
   html += `<label style="font-weight: 500;">${label}:</label>`;
-  html += `<select class="column-mapping-select" data-field="${fieldKey}" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;">`;
+  html += `<select class="column-mapping-select" data-field="${fieldKey}" ${headerName ? `data-header="${headerName}"` : ''} style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;">`;
   html += `<option value="">-- Skip --</option>`;
   
   headers.forEach((header, index) => {
@@ -4470,6 +5437,24 @@ function createMappingRow(label, fieldKey, headers, currentValue) {
   return html;
 }
 
+// Create a custom EPD field row
+function createCustomEpdFieldRow(fieldName, columnIndex, headers, index) {
+  let html = `<div class="custom-epd-field-row" data-index="${index}" style="display: grid; grid-template-columns: 200px 1fr 40px; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid #eee; background-color: #f0f8ff;">`;
+  html += `<input type="text" class="custom-epd-field-name" value="${fieldName || ''}" placeholder="Field Name (e.g., CustomEPD1)" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;">`;
+  html += `<select class="custom-epd-field-column" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;">`;
+  html += `<option value="">-- Select Column --</option>`;
+  
+  headers.forEach((header, idx) => {
+    const selected = columnIndex === idx ? 'selected' : '';
+    html += `<option value="${idx}" ${selected}>${header}</option>`;
+  });
+  
+  html += `</select>`;
+  html += `<button class="remove-custom-epd-field-btn" data-index="${index}" style="padding: 6px 10px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">×</button>`;
+  html += `</div>`;
+  return html;
+}
+
 // Update column mappings from UI
 function updateColumnMappings() {
   const selects = document.querySelectorAll('.column-mapping-select');
@@ -4477,8 +5462,14 @@ function updateColumnMappings() {
     registrationNumber: null,
     animalName: null,
     sex: null,
+    sire: null,
+    dam: null,
+    mgs: null,
+    birthDate: null,
+    tattoo: null,
     epdTraits: {},
-    percentRanks: {}
+    percentRanks: {},
+    customEpdFields: []
   };
 
   selects.forEach(select => {
@@ -4491,6 +5482,16 @@ function updateColumnMappings() {
       mappings.animalName = value;
     } else if (field === 'sex') {
       mappings.sex = value;
+    } else if (field === 'sire') {
+      mappings.sire = value;
+    } else if (field === 'dam') {
+      mappings.dam = value;
+    } else if (field === 'mgs') {
+      mappings.mgs = value;
+    } else if (field === 'birthDate') {
+      mappings.birthDate = value;
+    } else if (field === 'tattoo') {
+      mappings.tattoo = value;
     } else if (field.startsWith('epd_')) {
       const trait = field.replace('epd_', '');
       if (value !== null) {
@@ -4501,6 +5502,22 @@ function updateColumnMappings() {
       if (value !== null) {
         mappings.percentRanks[trait] = value;
       }
+    }
+  });
+
+  // Update custom EPD fields
+  const customFieldRows = document.querySelectorAll('.custom-epd-field-row');
+  customFieldRows.forEach(row => {
+    const fieldNameInput = row.querySelector('.custom-epd-field-name');
+    const columnSelect = row.querySelector('.custom-epd-field-column');
+    const fieldName = fieldNameInput ? fieldNameInput.value.trim() : '';
+    const columnIndex = columnSelect && columnSelect.value ? parseInt(columnSelect.value) : null;
+    
+    if (fieldName && columnIndex !== null) {
+      mappings.customEpdFields.push({
+        fieldName: fieldName,
+        columnIndex: columnIndex
+      });
     }
   });
 
@@ -4784,9 +5801,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Add custom EPD field button (delegated event listener since it's created dynamically)
+  document.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'add-custom-epd-field-btn') {
+      const container = document.getElementById('custom-epd-fields-list');
+      if (!container) return;
+      
+      const headers = externalImportState.headers;
+      const currentFields = externalImportState.columnMappings.customEpdFields || [];
+      const newIndex = currentFields.length;
+      
+      const newFieldHtml = createCustomEpdFieldRow('', null, headers, newIndex);
+      container.insertAdjacentHTML('beforeend', newFieldHtml);
+      
+      // Update mappings
+      updateColumnMappings();
+    } else if (e.target && e.target.classList.contains('remove-custom-epd-field-btn')) {
+      const index = parseInt(e.target.dataset.index);
+      const row = e.target.closest('.custom-epd-field-row');
+      if (row) {
+        row.remove();
+        updateColumnMappings();
+        // Re-render to update indices
+        showColumnMappingDialog();
+      }
+    }
+  });
+
   // Update mappings when selects change
   document.addEventListener('change', (e) => {
     if (e.target.classList.contains('column-mapping-select')) {
+      updateColumnMappings();
+    } else if (e.target.classList.contains('custom-epd-field-name') || e.target.classList.contains('custom-epd-field-column')) {
       updateColumnMappings();
     }
   });

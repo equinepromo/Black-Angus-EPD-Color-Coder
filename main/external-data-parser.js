@@ -239,8 +239,14 @@ function autoDetectColumnMappings(headers, sampleRows) {
     registrationNumber: null,
     animalName: null,
     sex: null,
+    sire: null,
+    dam: null,
+    mgs: null,
+    birthDate: null,
+    tattoo: null,
     epdTraits: {},
-    percentRanks: {}
+    percentRanks: {},
+    customEpdFields: []
   };
   
   // Normalize headers for matching
@@ -273,6 +279,51 @@ function autoDetectColumnMappings(headers, sampleRows) {
   for (const header of normalizedHeaders) {
     if (fuzzyMatch(header.normalized, sexPatterns)) {
       mappings.sex = header.index;
+      break;
+    }
+  }
+  
+  // Find sire
+  const sirePatterns = ['sire', 'father', 'dad', 'sire name', 'sire reg', 'sire registration'];
+  for (const header of normalizedHeaders) {
+    if (fuzzyMatch(header.normalized, sirePatterns) && mappings.sire === null) {
+      mappings.sire = header.index;
+      break;
+    }
+  }
+  
+  // Find dam
+  const damPatterns = ['dam', 'mother', 'mom', 'dam name', 'dam reg', 'dam registration'];
+  for (const header of normalizedHeaders) {
+    if (fuzzyMatch(header.normalized, damPatterns) && mappings.dam === null) {
+      mappings.dam = header.index;
+      break;
+    }
+  }
+  
+  // Find MGS (Maternal Grand Sire)
+  const mgsPatterns = ['mgs', 'maternal grand sire', 'maternal grandsire', 'maternal grand site', 'mgs name', 'mgs reg'];
+  for (const header of normalizedHeaders) {
+    if (fuzzyMatch(header.normalized, mgsPatterns) && mappings.mgs === null) {
+      mappings.mgs = header.index;
+      break;
+    }
+  }
+  
+  // Find birth date
+  const birthDatePatterns = ['birth date', 'birthdate', 'dob', 'date of birth', 'bd', 'born'];
+  for (const header of normalizedHeaders) {
+    if (fuzzyMatch(header.normalized, birthDatePatterns) && mappings.birthDate === null) {
+      mappings.birthDate = header.index;
+      break;
+    }
+  }
+  
+  // Find tattoo
+  const tattooPatterns = ['tattoo', 'tattoo number', 'tattoo #'];
+  for (const header of normalizedHeaders) {
+    if (fuzzyMatch(header.normalized, tattooPatterns) && mappings.tattoo === null) {
+      mappings.tattoo = header.index;
       break;
     }
   }
@@ -355,6 +406,49 @@ function mapToBulkFileFormat(mappedData, columnMappings, metadata) {
       }
     }
     
+    // Initialize additionalInfo object
+    const additionalInfo = {};
+    
+    // Add sire if mapped
+    if (columnMappings.sire !== null && columnMappings.sire !== undefined) {
+      const sire = String(row[columnMappings.sire] || '').trim();
+      if (sire) {
+        additionalInfo.sire = sire;
+      }
+    }
+    
+    // Add dam if mapped
+    if (columnMappings.dam !== null && columnMappings.dam !== undefined) {
+      const dam = String(row[columnMappings.dam] || '').trim();
+      if (dam) {
+        additionalInfo.dam = dam;
+      }
+    }
+    
+    // Add MGS if mapped
+    if (columnMappings.mgs !== null && columnMappings.mgs !== undefined) {
+      const mgs = String(row[columnMappings.mgs] || '').trim();
+      if (mgs) {
+        additionalInfo.mgs = mgs;
+      }
+    }
+    
+    // Add birth date if mapped
+    if (columnMappings.birthDate !== null && columnMappings.birthDate !== undefined) {
+      const birthDate = String(row[columnMappings.birthDate] || '').trim();
+      if (birthDate) {
+        additionalInfo.birthDate = birthDate;
+      }
+    }
+    
+    // Add tattoo if mapped
+    if (columnMappings.tattoo !== null && columnMappings.tattoo !== undefined) {
+      const tattoo = String(row[columnMappings.tattoo] || '').trim();
+      if (tattoo) {
+        additionalInfo.tattoo = tattoo;
+      }
+    }
+    
     // Build EPD values
     const epdValues = {};
     for (const [trait, colIndex] of Object.entries(columnMappings.epdTraits)) {
@@ -394,19 +488,54 @@ function mapToBulkFileFormat(mappedData, columnMappings, metadata) {
       }
     }
     
+    // Add custom EPD fields if mapped
+    if (columnMappings.customEpdFields && Array.isArray(columnMappings.customEpdFields)) {
+      for (const customField of columnMappings.customEpdFields) {
+        if (customField.fieldName && customField.columnIndex !== null && customField.columnIndex !== undefined) {
+          const epdValue = String(row[customField.columnIndex] || '').trim();
+          if (epdValue) {
+            // Handle incomplete EPDs (values starting with "I" or "i")
+            let epd = epdValue;
+            if (!epdValue.startsWith('I') && !epdValue.startsWith('i')) {
+              // Try to parse as number
+              const numValue = parseFloat(epdValue);
+              if (!isNaN(numValue)) {
+                epd = String(numValue);
+              }
+            }
+            epdValues[customField.fieldName] = { epd };
+          }
+        }
+      }
+    }
+    
     if (Object.keys(epdValues).length > 0) {
       animalData.epdValues = epdValues;
     }
     
-    // Store additional unmapped columns in additionalInfo
-    const additionalInfo = {};
+    // Store additional unmapped columns in additionalInfo (only if not already mapped)
+    const mappedIndices = new Set();
+    if (columnMappings.registrationNumber !== null) mappedIndices.add(columnMappings.registrationNumber);
+    if (columnMappings.animalName !== null) mappedIndices.add(columnMappings.animalName);
+    if (columnMappings.sex !== null) mappedIndices.add(columnMappings.sex);
+    if (columnMappings.sire !== null) mappedIndices.add(columnMappings.sire);
+    if (columnMappings.dam !== null) mappedIndices.add(columnMappings.dam);
+    if (columnMappings.mgs !== null) mappedIndices.add(columnMappings.mgs);
+    if (columnMappings.birthDate !== null) mappedIndices.add(columnMappings.birthDate);
+    if (columnMappings.tattoo !== null) mappedIndices.add(columnMappings.tattoo);
+    Object.values(columnMappings.epdTraits || {}).forEach(idx => { if (idx !== null) mappedIndices.add(idx); });
+    Object.values(columnMappings.percentRanks || {}).forEach(idx => { if (idx !== null) mappedIndices.add(idx); });
+    if (columnMappings.customEpdFields && Array.isArray(columnMappings.customEpdFields)) {
+      columnMappings.customEpdFields.forEach(field => {
+        if (field.columnIndex !== null && field.columnIndex !== undefined) {
+          mappedIndices.add(field.columnIndex);
+        }
+      });
+    }
+    
     for (let i = 0; i < row.length; i++) {
       // Skip mapped columns
-      if (i === columnMappings.registrationNumber ||
-          i === columnMappings.animalName ||
-          i === columnMappings.sex ||
-          Object.values(columnMappings.epdTraits).includes(i) ||
-          Object.values(columnMappings.percentRanks).includes(i)) {
+      if (mappedIndices.has(i)) {
         continue;
       }
       

@@ -782,3 +782,17 @@ table td {
     background: #5a6268;
 }
 
+/* Unobtrusive details/summary styling for Backup & Restore */
+details summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+details summary::-webkit-details-marker {
+    display: none;
+}
+
+details summary::marker {
+    display: none;
+}
+

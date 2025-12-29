@@ -987,16 +987,17 @@ function createBackup() {
  * @param {Object} options - Restore options
  * @param {boolean} options.overwriteExisting - If true, overwrite existing animals; if false, skip existing (default: false)
  * @param {boolean} options.restoreCategories - If true, restore categories list (default: true)
+ * @param {boolean} options.snapshot - If true, perform snapshot restore: remove animals/categories not in backup (default: false)
  * @returns {Object} Result object with success status and counts
  */
 function restoreBackup(backup, options = {}) {
   try {
-    const { overwriteExisting = false, restoreCategories = true } = options;
+    const { overwriteExisting = false, restoreCategories = true, snapshot = false } = options;
     
     console.log('[CACHE] Restoring backup...');
     console.log(`[CACHE] Backup version: ${backup.version || 'unknown'}, Created: ${backup.createdAt || 'unknown'}`);
     console.log(`[CACHE] Animals in backup: ${backup.animals?.length || 0}`);
-    console.log(`[CACHE] Options: overwriteExisting=${overwriteExisting}, restoreCategories=${restoreCategories}`);
+    console.log(`[CACHE] Options: overwriteExisting=${overwriteExisting}, restoreCategories=${restoreCategories}, snapshot=${snapshot}`);
     
     if (!backup.animals || !Array.isArray(backup.animals)) {
       return { success: false, error: 'Invalid backup format: missing animals array' };
@@ -1005,17 +1006,78 @@ function restoreBackup(backup, options = {}) {
     let restoredCount = 0;
     let skippedCount = 0;
     let errorCount = 0;
+    let deletedCount = 0;
     
-    // Restore categories first if requested
-    if (restoreCategories && backup.categories && Array.isArray(backup.categories)) {
-      console.log(`[CACHE] Restoring ${backup.categories.length} categories...`);
-      const existingCategories = loadCategories();
-      const categoriesToAdd = backup.categories.filter(cat => !existingCategories.includes(cat));
+    // Snapshot mode: Remove animals and categories not in backup
+    if (snapshot && overwriteExisting) {
+      console.log('[CACHE] Snapshot mode: Removing animals and categories not in backup...');
       
-      if (categoriesToAdd.length > 0) {
-        const allCategories = [...existingCategories, ...categoriesToAdd];
-        saveCategories(allCategories);
-        console.log(`[CACHE] Added ${categoriesToAdd.length} new categories`);
+      // Get all registration numbers from backup
+      const backupRegNumbers = new Set();
+      for (const animalBackup of backup.animals) {
+        const registrationNumber = animalBackup.registrationNumber || animalBackup.data?.registrationNumber;
+        if (registrationNumber) {
+          backupRegNumbers.add(registrationNumber);
+        }
+      }
+      
+      // Get all current animals in cache
+      const cacheDir = ensureCacheDir();
+      if (fs.existsSync(cacheDir)) {
+        const files = fs.readdirSync(cacheDir);
+        const epdFiles = files.filter(f => f.startsWith('epd_') && f.endsWith('.json'));
+        
+        // Delete animals that aren't in backup
+        for (const file of epdFiles) {
+          try {
+            const filePath = path.join(cacheDir, file);
+            
+            // Read the cache file to get the actual registration number
+            // (filename may be sanitized, so we need the real registration number from the file)
+            let registrationNumber = null;
+            try {
+              const cacheContent = fs.readFileSync(filePath, 'utf8');
+              const cached = JSON.parse(cacheContent);
+              registrationNumber = cached.registrationNumber || cached.data?.registrationNumber;
+            } catch (readError) {
+              // If we can't read the file, try to extract from filename as fallback
+              registrationNumber = file.replace(/^epd_/, '').replace(/\.json$/, '');
+            }
+            
+            if (registrationNumber && !backupRegNumbers.has(registrationNumber)) {
+              fs.unlinkSync(filePath);
+              deletedCount++;
+              console.log(`[CACHE] Snapshot: Deleted animal not in backup: ${registrationNumber}`);
+            }
+          } catch (error) {
+            console.error(`[CACHE] Error deleting file ${file} during snapshot restore:`, error);
+            errorCount++;
+          }
+        }
+      }
+      
+      // Replace categories exactly (not merge) - snapshot mode
+      if (restoreCategories && backup.categories && Array.isArray(backup.categories)) {
+        console.log(`[CACHE] Snapshot: Replacing categories with backup categories (${backup.categories.length} categories)...`);
+        saveCategories(backup.categories);
+        console.log(`[CACHE] Snapshot: Categories replaced with backup categories`);
+      } else if (restoreCategories && snapshot) {
+        // If backup has no categories, restore to default
+        console.log(`[CACHE] Snapshot: Backup has no categories, restoring to default...`);
+        saveCategories(['My Herd']);
+      }
+    } else {
+      // Normal mode: Restore categories (merge/add)
+      if (restoreCategories && backup.categories && Array.isArray(backup.categories)) {
+        console.log(`[CACHE] Restoring ${backup.categories.length} categories...`);
+        const existingCategories = loadCategories();
+        const categoriesToAdd = backup.categories.filter(cat => !existingCategories.includes(cat));
+        
+        if (categoriesToAdd.length > 0) {
+          const allCategories = [...existingCategories, ...categoriesToAdd];
+          saveCategories(allCategories);
+          console.log(`[CACHE] Added ${categoriesToAdd.length} new categories`);
+        }
       }
     }
     
@@ -1067,12 +1129,13 @@ function restoreBackup(backup, options = {}) {
       }
     }
     
-    console.log(`[CACHE] Restore complete: ${restoredCount} restored, ${skippedCount} skipped, ${errorCount} errors`);
+    console.log(`[CACHE] Restore complete: ${restoredCount} restored, ${skippedCount} skipped, ${errorCount} errors${snapshot ? `, ${deletedCount} deleted (snapshot)` : ''}`);
     return {
       success: true,
       restoredCount,
       skippedCount,
       errorCount,
+      deletedCount: snapshot ? deletedCount : 0,
       totalInBackup: backup.animals.length
     };
   } catch (error) {
