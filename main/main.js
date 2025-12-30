@@ -1352,6 +1352,41 @@ ipcMain.handle('scrape-batch', async (event, registrationNumbers, category) => {
   let browser = null;
   const scraper = require('./scraper-puppeteer');
   
+  // Adaptive delay configuration - scales with batch size
+  const DELAY_CONFIG = {
+    // Small batch settings (fast)
+    smallBatch: {
+      baseMin: 500,        // 0.5 seconds
+      baseMax: 1000,       // 1 second
+      increment: 50,      // Small increment
+    },
+    // Large batch settings (conservative)
+    largeBatch: {
+      baseMin: 2000,      // 2 seconds
+      baseMax: 4000,      // 4 seconds
+      increment: 100,     // Moderate increment
+    },
+    // Thresholds
+    smallBatchSize: 20,   // Consider batches < 20 as "small"
+    aggressiveSlowdownStart: 100, // Start being more aggressive after 100 requests
+    aggressiveSlowdownMultiplier: 1.5, // Multiply delays more aggressively after threshold
+    
+    // Error handling
+    errorMultiplier: 2.0, // Double the delay on errors
+    successReduction: 0.05, // Reduce by 5% on success (gentler)
+    maxDelay: 15000        // Cap at 15 seconds max
+  };
+  
+  // Determine batch characteristics
+  const batchSize = needsScraping.length;
+  const isSmallBatch = batchSize <= DELAY_CONFIG.smallBatchSize;
+  const config = isSmallBatch ? DELAY_CONFIG.smallBatch : DELAY_CONFIG.largeBatch;
+  
+  // Start with base delay based on batch size
+  let currentBaseDelay = config.baseMin;
+  
+  console.log(`[MAIN] Batch size: ${batchSize} (${isSmallBatch ? 'small' : 'large'}), starting delay: ${currentBaseDelay}ms`);
+  
   try {
     if (needsScraping.length > 0) {
       // Launch browser only if we have items to scrape
@@ -1361,17 +1396,70 @@ ipcMain.handle('scrape-batch', async (event, registrationNumbers, category) => {
       
       for (let i = 0; i < needsScraping.length; i++) {
         const regNum = needsScraping[i];
+        const requestNumber = i + 1;
+        let requestSuccess = false;
+        
         try {
           const result = await scraper.scrapeEPD(regNum, browser, false, selectedCategory);
           results.push({ registrationNumber: regNum, success: true, data: result });
+          requestSuccess = true;
           
-          // Add delay between scraping requests (not for cached items)
-          if (i < needsScraping.length - 1) {
-            const waitTime = 500 + Math.random() * 500; // 0.5-1 seconds
-            await delay(waitTime);
-          }
+          // On success: slightly reduce delay (but not below base for this batch size)
+          const minDelay = config.baseMin;
+          currentBaseDelay = Math.max(
+            minDelay,
+            currentBaseDelay * (1 - DELAY_CONFIG.successReduction)
+          );
+          console.log(`[MAIN] Request ${requestNumber}/${batchSize} successful. Base delay: ${Math.round(currentBaseDelay)}ms`);
+          
         } catch (error) {
           results.push({ registrationNumber: regNum, success: false, error: error.message });
+          requestSuccess = false;
+          
+          // On error: significantly increase delay
+          currentBaseDelay = Math.min(
+            DELAY_CONFIG.maxDelay,
+            currentBaseDelay * DELAY_CONFIG.errorMultiplier
+          );
+          console.log(`[MAIN] Request ${requestNumber}/${batchSize} failed: ${error.message}`);
+          console.log(`[MAIN] Increased base delay to: ${Math.round(currentBaseDelay)}ms`);
+        }
+        
+        // Add delay between scraping requests (not for cached items)
+        if (i < needsScraping.length - 1) {
+          // Calculate incremental increase based on request number
+          const incrementalIncrease = requestNumber * config.increment;
+          
+          // Apply aggressive slowdown after threshold (especially important for large batches)
+          let slowdownFactor = 1.0;
+          if (requestNumber >= DELAY_CONFIG.aggressiveSlowdownStart) {
+            const excessRequests = requestNumber - DELAY_CONFIG.aggressiveSlowdownStart;
+            slowdownFactor = Math.pow(DELAY_CONFIG.aggressiveSlowdownMultiplier, excessRequests / 50); // Every 50 requests, multiply by 1.5x
+            slowdownFactor = Math.min(3.0, slowdownFactor); // Cap slowdown at 3x
+          }
+          
+          // Calculate delay: current base + random variation + incremental increase, all scaled by slowdown factor
+          const randomVariation = Math.random() * (config.baseMax - config.baseMin);
+          const baseDelayWithIncrement = currentBaseDelay + incrementalIncrease;
+          const scaledDelay = baseDelayWithIncrement * slowdownFactor;
+          const waitTime = scaledDelay + randomVariation;
+          
+          // Cap at max delay
+          const finalWaitTime = Math.min(DELAY_CONFIG.maxDelay, Math.round(waitTime));
+          
+          if (requestNumber % 10 === 0 || requestNumber >= DELAY_CONFIG.aggressiveSlowdownStart) {
+            console.log(`[MAIN] Request ${requestNumber}/${batchSize}: Waiting ${finalWaitTime}ms (base: ${Math.round(currentBaseDelay)}ms, increment: ${incrementalIncrease}ms, slowdown: ${slowdownFactor.toFixed(2)}x)`);
+          }
+          await delay(finalWaitTime);
+          
+          // Increment base delay for next request (incremental backoff)
+          // But only if we haven't hit aggressive slowdown yet
+          if (requestNumber < DELAY_CONFIG.aggressiveSlowdownStart) {
+            currentBaseDelay = Math.min(
+              DELAY_CONFIG.maxDelay,
+              currentBaseDelay + config.increment
+            );
+          }
         }
         
         // Send progress update

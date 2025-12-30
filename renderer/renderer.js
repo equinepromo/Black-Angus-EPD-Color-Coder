@@ -86,6 +86,428 @@ const damDropdown = document.getElementById('dam-dropdown');
 const calculateMatingBtn = document.getElementById('calculate-mating-btn');
 const categorySelect = document.getElementById('category-select');
 
+// Find Bar (Command+F / Ctrl+F search functionality)
+const findBar = document.createElement('div');
+findBar.id = 'find-bar';
+findBar.style.cssText = `
+  display: none;
+  position: fixed;
+  top: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-top: none;
+  border-right: none;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 10000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+`;
+findBar.innerHTML = `
+  <div style="display: flex; align-items: center; gap: 8px;">
+    <input type="text" id="find-input" placeholder="Find..." 
+      style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; width: 250px;">
+    <button id="find-prev" style="padding: 4px 8px; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; cursor: pointer;">↑</button>
+    <button id="find-next" style="padding: 4px 8px; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; cursor: pointer;">↓</button>
+    <span id="find-results" style="font-size: 12px; color: #666; margin: 0 8px;">0/0</span>
+    <button id="find-close" style="padding: 4px 8px; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; cursor: pointer;">✕</button>
+  </div>
+`;
+document.body.appendChild(findBar);
+
+const findInput = document.getElementById('find-input');
+const findPrevBtn = document.getElementById('find-prev');
+const findNextBtn = document.getElementById('find-next');
+const findResults = document.getElementById('find-results');
+const findCloseBtn = document.getElementById('find-close');
+
+let findMatches = [];
+let currentMatchIndex = -1;
+let findHighlightClass = 'find-highlight';
+let findCurrentClass = 'find-current';
+
+// Add CSS for highlighting
+const findStyle = document.createElement('style');
+findStyle.textContent = `
+  .${findHighlightClass} {
+    background-color: #ffeb3b !important;
+    color: #000 !important;
+    padding: 2px 0 !important;
+  }
+  .${findCurrentClass} {
+    background-color: #ff9800 !important;
+    color: #000 !important;
+    padding: 2px 0 !important;
+  }
+`;
+document.head.appendChild(findStyle);
+
+// Function to clear all highlights
+function clearFindHighlights() {
+  const highlights = document.querySelectorAll(`mark.${findHighlightClass}, mark.${findCurrentClass}`);
+  highlights.forEach(el => {
+    // Replace the mark element with its text content
+    const parent = el.parentNode;
+    if (parent) {
+      const textNode = document.createTextNode(el.textContent);
+      parent.replaceChild(textNode, el);
+      // Normalize to merge adjacent text nodes
+      parent.normalize();
+    }
+  });
+}
+
+// Function to find and highlight matches (async to prevent freezing)
+let findTimeout = null;
+let findInProgress = false;
+let currentSearchText = '';
+let findCancelRequested = false;
+
+function performFind(searchText, direction = 'next') {
+  if (!searchText) {
+    clearFindHighlights();
+    findMatches = [];
+    currentMatchIndex = -1;
+    findResults.textContent = '0/0';
+    currentSearchText = '';
+    return;
+  }
+
+  // Store the current search text
+  currentSearchText = searchText;
+
+  // Clear any pending search
+  if (findTimeout) {
+    clearTimeout(findTimeout);
+    findTimeout = null;
+  }
+  
+  // Cancel any in-progress search and clear old highlights immediately
+  findCancelRequested = true;
+  clearFindHighlights();
+  findMatches = [];
+  
+  // Debounce the search to avoid freezing on rapid typing
+  findTimeout = setTimeout(() => {
+    // Only proceed if this is still the current search text
+    if (currentSearchText === searchText) {
+      findTimeout = null;
+      // Reset cancellation flag before starting new search
+      findCancelRequested = false;
+      performFindInternal(searchText, direction);
+    }
+  }, 300); // 300ms debounce - balance between responsiveness and allowing typing
+}
+
+function performFindInternal(searchText, direction = 'next') {
+  // Check if search was cancelled or text changed
+  if (findCancelRequested) {
+    return;
+  }
+  
+  // Verify this is still the current search
+  if (currentSearchText !== searchText) {
+    return;
+  }
+  
+  if (findInProgress) {
+    // If a search is already in progress, wait for it to finish or cancel
+    // The in-progress search will check for cancellation itself
+    setTimeout(() => {
+      if (currentSearchText === searchText && !findInProgress && !findCancelRequested) {
+        performFindInternal(searchText, direction);
+      }
+    }, 100);
+    return;
+  }
+  
+  // Mark search as in progress and clear previous results
+  findInProgress = true;
+  clearFindHighlights();
+  findMatches = [];
+  currentMatchIndex = -1;
+  findResults.textContent = 'Searching...';
+
+  // Capture the search text for this specific search operation
+  const capturedSearchText = searchText;
+  // Escape special regex characters, but preserve spaces and allow flexible whitespace matching
+  // Trim the search text but allow spaces within it
+  const escapedText = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Create regex that matches the text (spaces will match literally, which is what we want)
+  const searchRegex = new RegExp(escapedText, 'gi');
+  
+  // Limit search to visible content containers to improve performance
+  const searchContainers = [
+    document.getElementById('main-results-container'),
+    document.getElementById('inventory-results-container'),
+    document.getElementById('mating-results-container'),
+    document.getElementById('bulk-files-status-container'),
+    document.getElementById('modal-animal-details')
+  ].filter(el => el && el.offsetParent !== null);
+
+  // If no specific containers, search body but limit scope
+  const searchRoot = searchContainers.length > 0 ? null : document.body;
+  
+  // Process search in chunks to avoid blocking
+  let processedNodes = 0;
+  const MAX_NODES_PER_CHUNK = 50;
+  const nodesToProcess = [];
+  
+  function collectNodes(root) {
+    const walker = document.createTreeWalker(
+      root || document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function(node) {
+          // Skip script and style tags
+          const parent = node.parentElement;
+          if (!parent || parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE' || 
+              parent.id === 'find-bar' || parent.closest('#find-bar')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          // Only search in visible content
+          if (parent.offsetParent === null) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          // If we have specific containers, only search within them
+          if (searchContainers.length > 0) {
+            const isInContainer = searchContainers.some(container => 
+              container.contains(parent)
+            );
+            if (!isInContainer) {
+              return NodeFilter.FILTER_REJECT;
+            }
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+
+    let node;
+    while (node = walker.nextNode()) {
+      nodesToProcess.push(node);
+    }
+  }
+  
+  if (searchRoot) {
+    collectNodes(searchRoot);
+  } else {
+    searchContainers.forEach(container => collectNodes(container));
+  }
+
+  // Process nodes in chunks
+  function processChunk(startIndex) {
+    // Check if search was cancelled or user typed new text
+    if (findCancelRequested || currentSearchText !== capturedSearchText) {
+      findInProgress = false;
+      findCancelRequested = false;
+      clearFindHighlights();
+      findMatches = [];
+      return;
+    }
+    
+    const endIndex = Math.min(startIndex + MAX_NODES_PER_CHUNK, nodesToProcess.length);
+    
+    for (let i = startIndex; i < endIndex; i++) {
+      // Check for cancellation during processing
+      if (findCancelRequested || currentSearchText !== capturedSearchText) {
+        findInProgress = false;
+        findCancelRequested = false;
+        clearFindHighlights();
+        findMatches = [];
+        return;
+      }
+      
+      const node = nodesToProcess[i];
+      const text = node.textContent;
+      // Reset regex lastIndex to avoid state issues
+      searchRegex.lastIndex = 0;
+      const matches = [...text.matchAll(searchRegex)];
+      
+      if (matches.length > 0) {
+        // Process matches in reverse order to maintain correct indices
+        for (let j = matches.length - 1; j >= 0; j--) {
+          const match = matches[j];
+          const startIdx = match.index;
+          const endIdx = startIdx + match[0].length;
+          
+          try {
+            const range = document.createRange();
+            range.setStart(node, startIdx);
+            range.setEnd(node, endIdx);
+            
+            const highlight = document.createElement('mark');
+            highlight.className = findHighlightClass;
+            highlight.textContent = match[0];
+            
+            range.surroundContents(highlight);
+            findMatches.push(highlight);
+          } catch (e) {
+            // If surroundContents fails, skip this match (too complex DOM structure)
+            // This prevents freezing on complex nodes
+          }
+        }
+      }
+    }
+    
+    processedNodes = endIndex;
+    
+    // Check again before continuing
+    if (findCancelRequested || currentSearchText !== capturedSearchText) {
+      findInProgress = false;
+      findCancelRequested = false;
+      clearFindHighlights();
+      findMatches = [];
+      return;
+    }
+    
+    // Update progress
+    if (processedNodes < nodesToProcess.length) {
+      // Process next chunk asynchronously
+      requestAnimationFrame(() => {
+        processChunk(processedNodes);
+      });
+    } else {
+      // Search complete - verify it's still the current search
+      if (currentSearchText === capturedSearchText && !findCancelRequested) {
+        findInProgress = false;
+        
+        if (findMatches.length > 0) {
+          if (direction === 'next') {
+            currentMatchIndex = 0;
+          } else {
+            currentMatchIndex = findMatches.length - 1;
+          }
+          highlightCurrentMatch();
+        } else {
+          findResults.textContent = '0/0';
+        }
+      } else {
+        // Search was cancelled, clean up
+        findInProgress = false;
+        findCancelRequested = false;
+        clearFindHighlights();
+        findMatches = [];
+      }
+    }
+  }
+  
+  // Start processing
+  if (nodesToProcess.length > 0) {
+    processChunk(0);
+  } else {
+    findInProgress = false;
+    findResults.textContent = '0/0';
+  }
+}
+
+// Function to highlight current match
+function highlightCurrentMatch() {
+  findMatches.forEach((match, index) => {
+    match.classList.remove(findCurrentClass);
+    if (index === currentMatchIndex) {
+      match.classList.add(findCurrentClass);
+      match.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+  findResults.textContent = `${currentMatchIndex + 1}/${findMatches.length}`;
+}
+
+// Function to navigate to next match
+function findNext() {
+  if (findMatches.length === 0) return;
+  currentMatchIndex = (currentMatchIndex + 1) % findMatches.length;
+  highlightCurrentMatch();
+}
+
+// Function to navigate to previous match
+function findPrev() {
+  if (findMatches.length === 0) return;
+  currentMatchIndex = (currentMatchIndex - 1 + findMatches.length) % findMatches.length;
+  highlightCurrentMatch();
+}
+
+// Function to show find bar
+function showFindBar() {
+  findBar.style.display = 'block';
+  findInput.focus();
+  findInput.select();
+  
+  // If there's existing search text, perform search immediately
+  if (findInput.value) {
+    performFind(findInput.value);
+  }
+}
+
+// Function to hide find bar
+function hideFindBar() {
+  findBar.style.display = 'none';
+  clearFindHighlights();
+  findMatches = [];
+  currentMatchIndex = -1;
+  findInput.value = '';
+  findResults.textContent = '0/0';
+}
+
+// Find bar event listeners
+findInput.addEventListener('input', (e) => {
+  performFind(e.target.value, 'next');
+});
+
+findInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (e.shiftKey) {
+      findPrev();
+    } else {
+      findNext();
+    }
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    hideFindBar();
+  }
+});
+
+findNextBtn.addEventListener('click', findNext);
+findPrevBtn.addEventListener('click', findPrev);
+findCloseBtn.addEventListener('click', hideFindBar);
+
+// Global keyboard shortcut for Cmd+F / Ctrl+F
+document.addEventListener('keydown', (e) => {
+  // Check for Cmd+F (Mac) or Ctrl+F (Windows/Linux)
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const isFindShortcut = (isMac && e.metaKey && e.key === 'f') || 
+                         (!isMac && e.ctrlKey && e.key === 'f');
+  
+  if (isFindShortcut) {
+    e.preventDefault();
+    if (findBar.style.display === 'none') {
+      showFindBar();
+    } else {
+      findInput.focus();
+      findInput.select();
+    }
+  }
+  
+  // Allow Cmd+G / Ctrl+G for "Find Next" when find bar is visible
+  if (findBar.style.display !== 'none') {
+    const isNextShortcut = (isMac && e.metaKey && e.key === 'g') || 
+                           (!isMac && e.ctrlKey && e.key === 'g');
+    if (isNextShortcut) {
+      e.preventDefault();
+      findNext();
+    }
+    
+    // Allow Cmd+Shift+G / Ctrl+Shift+G for "Find Previous"
+    const isPrevShortcut = (isMac && e.metaKey && e.shiftKey && e.key === 'G') || 
+                           (!isMac && e.ctrlKey && e.shiftKey && e.key === 'G');
+    if (isPrevShortcut) {
+      e.preventDefault();
+      findPrev();
+    }
+  }
+});
+
 // Load color criteria on page load
 window.electronAPI.getColorCriteria().then(criteria => {
   colorCriteria = criteria;
